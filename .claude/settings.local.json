@@ -1,0 +1,23 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(done)",
+      "Bash(du:*)",
+      "Bash(ls:*)",
+      "Bash(head:*)",
+      "Bash(dir:*)",
+      "WebSearch",
+      "WebFetch(domain:github.com)",
+      "Bash(npx create-next-app:*)",
+      "Bash(npx create-next-app@latest:*)",
+      "Bash(xcopy \"C:\\\\Users\\\\samsung\\\\Documents\\\\project\\\\marketshare-temp\\\\*\" \"C:\\\\Users\\\\samsung\\\\Documents\\\\project\\\\marketshare\"\" /E /H /Y /I 2>&1 && rmdir /S /Q \"C:UserssamsungDocumentsprojectmarketshare-temp \")",
+      "WebFetch(domain:www.sbplus.co.kr)",
+      "WebFetch(domain:tubeweb.co.kr)",
+      "Bash(npm install:*)",
+      "Bash(npm run build:*)",
+      "Bash(git init:*)",
+      "Bash(git add:*)",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\nPhase 1: 프로젝트 초기화 및 핵심 구조 구축\n\n- Next.js 15 + TypeScript + Tailwind CSS 프로젝트 설정\n- Firebase 클라이언트/서버 SDK 설정\n- 전체 TypeScript 타입 정의 \\(User, Mall, Product, Order 등\\)\n- 테마 시스템 구축 \\(5개 테마: basic, shop, company, restaurant, service\\)\n- UI 컴포넌트 라이브러리 \\(Button, Input, Modal, Badge, Card\\)\n- 글로벌 CSS 디자인 시스템 \\(CSS Variables, 애니메이션\\)\n- 레이아웃 컴포넌트 \\(Header, Footer, AdminSidebar\\)\n- 멀티테넌트 미들웨어 \\(서브도메인 + 경로 기반 라우팅\\)\n- Zustand 스토어 \\(cart-store, auth-store\\)\n- AuthProvider, ThemeProvider 구현\n- 페이지: 홈, 로그인, 회원가입, 상품목록, 분양신청\n- 관리자 대시보드: 플랫폼 관리자, 몰 관리자\n\nCo-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>\nEOF\n\\)\")"
+    ]
+  }
+}

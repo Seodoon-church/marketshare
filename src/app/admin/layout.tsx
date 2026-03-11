@@ -1,7 +1,10 @@
+import type { Metadata } from 'next';
 import { AdminSidebar } from '@/components/layout/AdminSidebar';
 
-export const metadata = {
+export const metadata: Metadata = {
   title: '플랫폼 관리자',
+  description:
+    'MarketShare 플랫폼 전체를 관리하는 관리자 대시보드입니다. 매출, 주문, 입점몰, 회원 현황을 한눈에 확인하고 운영할 수 있습니다.',
 };
 
 export default function AdminLayout({

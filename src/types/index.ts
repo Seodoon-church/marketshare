@@ -17,6 +17,24 @@ export type SettlementStatus = 'pending' | 'processing' | 'completed';
 export type PGPaymentAuth = 'platform' | 'individual' | 'selective';
 export type MallLevel = 1 | 2 | 3 | 4 | 5;
 
+// ---- PG 설정 ----
+export interface PGProviderConfig {
+  enabled: boolean;
+  mid: string;           // 상점 MID / 가맹점 코드
+  apiKey: string;
+  apiSecret: string;
+  impCode: string;       // PortOne IMP 코드 (가맹점 식별코드)
+  testMode: boolean;
+  pgId: string;          // PortOne PG사 식별자 (예: 'html5_inicis', 'kakaopay')
+}
+
+export interface MallPGConfig {
+  pgPaymentAuth: PGPaymentAuth;
+  selectedProviders: PGProvider[];
+  configs: Partial<Record<PGProvider, PGProviderConfig>>;
+  defaultProvider: PGProvider | null;
+}
+
 // ---- User ----
 export interface User {
   id: string;
@@ -37,6 +55,10 @@ export interface User {
   marketingConsent: boolean;
   privacyConsent: boolean;
   referredBy: string | null;
+  pointBalance: number;
+  pointsByMall: Record<string, number>;
+  gradeByMall: Record<string, string>;
+  supplierIds: string[];
   lastLoginAt: Date;
   createdAt: Date;
   updatedAt: Date;
@@ -71,6 +93,7 @@ export interface Mall {
   referralCommissionRate: number;
   salesCommissionRate: number;
   pgPaymentAuth: PGPaymentAuth;
+  pgConfig: MallPGConfig | null;
   description: string;
   logoUrl: string | null;
   faviconUrl: string | null;
@@ -80,6 +103,7 @@ export interface Mall {
   isClosedMall: boolean;
   requireMemberApproval: boolean;
   hidePriceForNonMembers: boolean;
+  pointSettings: PointSettings | null;
   productCount: number;
   orderCount: number;
   totalRevenue: number;
@@ -89,6 +113,8 @@ export interface Mall {
   updatedAt: Date;
   franchiseStartDate: Date;
   franchiseEndDate: Date | null;
+  // === 분양 설정 ===
+  franchiseSettings?: FranchiseSettings | null;
 }
 
 export interface BusinessInfo {
@@ -96,15 +122,38 @@ export interface BusinessInfo {
   businessNumber: string;
   representative: string;
   address: string;
+  addressDetail?: string;
+  zipcode?: string;
   phone: string;
   email: string;
-  onlineBusinessNumber?: string;
+  // 네이버 스마트스토어 수준 필드
+  sellerType?: 'domestic' | 'overseas';         // 판매자 유형
+  businessCategory?: 'personal' | 'corporate';  // 사업자 구분 (개인/법인)
+  businessSector?: string;                       // 업태
+  businessItem?: string;                         // 업종
+  onlineBusinessNumber?: string;                 // 통신판매업신고번호
+  // 담당자 정보
+  managerName?: string;
+  managerPhone?: string;
+  managerEmail?: string;
+  // 배송 정보
+  warehouseZipcode?: string;
+  warehouseAddress?: string;
+  warehouseAddressDetail?: string;
+  warehousePhone?: string;
+  warehousePhone2?: string;
+  returnZipcode?: string;
+  returnAddress?: string;
+  returnAddressDetail?: string;
+  returnPhone?: string;
+  returnPhone2?: string;
 }
 
 export interface BankInfo {
   bank: string;
   accountNumber: string;
   holder: string;
+  settlementMethod?: 'bank_transfer' | 'npay_biz';  // 정산대금수령방법
 }
 
 // ---- Product ----
@@ -151,6 +200,12 @@ export interface Product {
   createdAt: Date;
   updatedAt: Date;
   publishedAt: Date | null;
+  // === 분양몰 협동판매 ===
+  sourceType?: 'own' | 'headquarters' | 'franchisee' | 'supplier';
+  sourceMallId?: string | null;
+  sourceProductId?: string | null;
+  isSharedToNetwork?: boolean;
+  networkVisibility?: 'all' | 'headquarters_only' | 'none';
 }
 
 export interface ProductImage {
@@ -212,6 +267,12 @@ export interface Order {
   referralCommission: number;
   settlementAmount: number;
   isSettled: boolean;
+  pointsEarned: number;
+  pointsUsed: number;
+  couponCode: string | null;
+  couponDiscount: number;
+  trackingCarrier: string | null;
+  trackingUrl: string | null;
   cancelReason: string | null;
   refundAmount: number | null;
   createdAt: Date;
@@ -229,6 +290,8 @@ export interface OrderItem {
   options: Record<string, string>;
   imageUrl: string;
   supplierId: string | null;
+  sourceType?: 'own' | 'headquarters' | 'franchisee' | 'supplier';
+  sourceMallId?: string | null;
 }
 
 export interface PaymentInfo {
@@ -375,8 +438,29 @@ export interface FranchiseApplication {
   adminNotes: string;
   reviewedBy: string | null;
   mallId: string | null;
+  parentMallId?: string | null;
   createdAt: Date;
   updatedAt: Date;
+}
+
+// ---- Franchise Settings ----
+export interface FranchiseSettings {
+  showHeadquartersProducts: boolean;
+  showNetworkProducts: boolean;
+  shareOwnProducts: boolean;
+  hiddenProductIds: string[];
+  customCommissionRate: number | null;
+}
+
+// ---- Shared Product (네트워크 공유 상품 참조) ----
+export interface SharedProduct {
+  id: string;
+  sourceProductId: string;
+  sourceMallId: string;
+  sourceMallName: string;
+  sourceType: 'headquarters' | 'franchisee';
+  isHidden: boolean;
+  addedAt: Date;
 }
 
 // ---- Settlement ----
@@ -394,6 +478,8 @@ export interface Settlement {
   status: SettlementStatus;
   bankInfo: BankInfo;
   processedAt: Date | null;
+  taxInvoiceId: string | null;
+  settlementReportId: string | null;
   createdAt: Date;
 }
 
@@ -409,7 +495,333 @@ export interface Supplier {
   bankInfo: BankInfo;
   commissionRate: number;
   isActive: boolean;
+  approvalStatus: SupplierApprovalStatus;
+  approvedBy: string | null;
+  userId: string;
+  assignedMallIds: string[];
   productCount: number;
+  totalSales: number;
   createdAt: Date;
   updatedAt: Date;
+}
+
+// ============ 분양 요금제 ============
+
+export type PlanId = 'free' | 'starter' | 'business' | 'enterprise';
+
+export interface PricingPlan {
+  id: PlanId;
+  name: string;
+  nameEn: string;
+  monthlyPrice: number;        // 월 요금 (원)
+  yearlyMonthlyPrice: number;  // 연결제 시 월 요금
+  yearlyDiscount: number;      // 연결제 할인율 (%)
+  salesCommission: number;     // 판매 수수료율 (%)
+  maxProducts: number | null;  // null = 무제한
+  storageGB: number;
+  availableThemes: number | null; // null = 전체+커스텀
+  customDomains: number | null;   // null = 무제한
+  maxAdmins: number | null;       // null = 무제한
+  features: PlanFeature[];
+  mainMarketExposure: 'basic' | 'recommended' | 'premium' | 'top';
+  pgPaymentAuth: PGPaymentAuth;
+  allowSubFranchise: boolean;
+  marketingTools: boolean;
+  apiAccess: boolean;
+  isPopular?: boolean;          // UI에서 "인기" 뱃지 표시
+}
+
+export interface PlanFeature {
+  label: string;
+  included: boolean;
+}
+
+export interface FranchiseCondition {
+  planId: PlanId;
+  requireBusinessLicense: boolean;
+  requireIdentityVerification: boolean;
+  requiredDocuments: string[];
+  approvalType: 'instant' | 'review';  // instant = 즉시 개설, review = 심사 후
+  approvalDays: number;                 // 심사 소요일
+}
+
+// ============ D-1: 포인트 시스템 ============
+
+export type PointTransactionType = 'earned' | 'used' | 'expired' | 'admin_granted' | 'admin_deducted';
+
+export interface PointTransaction {
+  id: string;
+  userId: string;
+  mallId: string;
+  orderId: string | null;
+  type: PointTransactionType;
+  amount: number;       // 양수=적립/지급, 음수=사용/차감
+  balance: number;      // 트랜잭션 후 잔액
+  description: string;
+  expiresAt: Date | null;
+  createdBy: string;    // userId or 'system'
+  createdAt: Date;
+}
+
+export interface PointSettings {
+  enabled: boolean;
+  earningRate: number;           // % (예: 1 = 1%)
+  minOrderAmount: number;        // 최소 주문금액
+  maxEarningPerOrder: number | null; // 주문당 최대 적립 (null=무제한)
+  expirationDays: number;        // 만료일수 (0=무제한)
+  allowPartialUse: boolean;      // 부분사용 허용
+  minUsageAmount: number;        // 최소 사용금액
+}
+
+// ============ D-2: 회원등급 시스템 ============
+
+export interface MemberGrade {
+  id: string;
+  mallId: string;
+  name: string;         // 일반, 실버, 골드, VIP, VVIP
+  level: number;        // 1~5
+  minPurchaseAmount: number;     // 승급 기준 구매금액
+  evaluationPeriodDays: number;  // 평가 기간 (예: 90일)
+  benefits: GradeBenefits;
+  color: string;        // 배지 색상
+  order: number;
+  isActive: boolean;
+  createdAt: Date;
+}
+
+export interface GradeBenefits {
+  extraPointRate: number;         // 추가 포인트 적립률 (%)
+  extraDiscountRate: number;      // 추가 할인율 (%)
+  freeShippingThreshold: number;  // 무료배송 기준금액
+}
+
+// ============ D-3: 쿠폰 시스템 ============
+
+export type CouponType = 'percentage' | 'fixed' | 'free_shipping';
+export type CouponScope = 'all' | 'category' | 'product';
+
+export interface Coupon {
+  id: string;
+  code: string;
+  name: string;
+  type: CouponType;
+  discountValue: number;           // % 또는 원
+  maxDiscountAmount: number | null; // 최대 할인액 (정률 쿠폰용)
+  minPurchaseAmount: number;       // 최소 구매금액
+  mallId: string | null;           // null = 플랫폼 쿠폰
+  scope: CouponScope;
+  scopeTargetIds: string[];        // 카테고리 또는 상품 ID
+  usageLimitPerUser: number | null;
+  totalUsageLimit: number | null;
+  usageCount: number;
+  startDate: Date;
+  endDate: Date;
+  isActive: boolean;
+  createdBy: string;
+  createdAt: Date;
+}
+
+export interface CouponUsage {
+  id: string;
+  couponId: string;
+  couponCode: string;
+  userId: string;
+  orderId: string;
+  mallId: string;
+  discountAmount: number;
+  usedAt: Date;
+}
+
+export interface UserCoupon {
+  couponId: string;
+  coupon?: Coupon;
+  downloadedAt: Date;
+  usedAt: Date | null;
+  usedOrderId: string | null;
+}
+
+// ============ D-4: 배송 관리 ============
+
+export interface ShippingZone {
+  id: string;
+  mallId: string;
+  name: string;          // 서울/경기, 지방, 제주/도서산간
+  regions: string[];     // 우편번호 prefix 또는 지역명
+  baseFee: number;
+  freeShippingThreshold: number;
+  order: number;
+  isActive: boolean;
+}
+
+export interface ShippingCarrier {
+  id: string;
+  code: string;          // cj, hanjin, lotte, logen, post
+  name: string;
+  trackingUrl: string;   // {invoice} 플레이스홀더
+  isActive: boolean;
+  order: number;
+}
+
+export interface ShippingTemplate {
+  id: string;
+  mallId: string;
+  name: string;
+  zones: Record<string, { fee: number; freeThreshold: number }>;
+  isDefault: boolean;
+  createdAt: Date;
+}
+
+// ============ D-5: 엑셀 대량처리 ============
+
+export type BulkOperationType = 'product_upload' | 'product_export' | 'order_export' | 'member_export' | 'tracking_upload';
+
+export interface BulkOperation {
+  id: string;
+  type: BulkOperationType;
+  userId: string;
+  mallId: string | null;
+  status: 'pending' | 'processing' | 'completed' | 'failed';
+  totalRows: number;
+  processedRows: number;
+  errorRows: number;
+  errors: Array<{ row: number; field?: string; message: string }>;
+  downloadUrl: string | null;
+  createdAt: Date;
+  completedAt: Date | null;
+}
+
+// ============ D-6: 공급사 포탈 (B2B) ============
+
+export type SupplierApprovalStatus = 'pending' | 'approved' | 'rejected' | 'suspended';
+
+export interface SupplierApplication {
+  id: string;
+  applicantName: string;
+  applicantEmail: string;
+  applicantPhone: string;
+  businessName: string;
+  businessNumber: string;
+  productCategories: string[];
+  sampleProducts: string;
+  message: string;
+  status: 'pending' | 'approved' | 'rejected';
+  reviewedBy: string | null;
+  adminNotes: string;
+  supplierId: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface SupplierSettlement {
+  id: string;
+  supplierId: string;
+  supplierName: string;
+  period: { startDate: Date; endDate: Date };
+  totalSales: number;
+  totalCommission: number;
+  totalSettlement: number;
+  orderCount: number;
+  orderIds: string[];
+  status: SettlementStatus;
+  bankInfo: BankInfo;
+  processedAt: Date | null;
+  createdAt: Date;
+}
+
+// ============ D-7: SMS/알림 시스템 ============
+
+export type NotificationType = 'sms' | 'alimtalk' | 'email';
+export type NotificationStatus = 'pending' | 'sent' | 'failed';
+export type NotificationTemplateKey = 'order_confirm' | 'payment_complete' | 'shipping' | 'delivery' | 'cancellation' | 'point_earned' | 'grade_upgraded';
+
+export interface NotificationSettings {
+  mallId: string;
+  smsEnabled: boolean;
+  alimtalkEnabled: boolean;
+  emailEnabled: boolean;
+  templates: Record<NotificationTemplateKey, { sms: boolean; alimtalk: boolean; email: boolean }>;
+  provider: 'nhncloud' | 'aligo' | 'coolsms';
+  apiKey: string;
+  apiSecret: string;
+  senderNumber: string;
+  updatedAt: Date;
+}
+
+export interface NotificationHistory {
+  id: string;
+  type: NotificationType;
+  templateKey: NotificationTemplateKey;
+  userId: string;
+  recipient: string;
+  mallId: string;
+  orderId: string | null;
+  status: NotificationStatus;
+  message: string;
+  errorMessage: string | null;
+  sentAt: Date | null;
+  createdAt: Date;
+}
+
+export interface NotificationTemplateData {
+  id: string;
+  key: NotificationTemplateKey;
+  name: string;
+  type: NotificationType;
+  subject: string;
+  content: string;          // {{변수}} 포함
+  variables: string[];
+  isActive: boolean;
+  mallId: string | null;    // null = 플랫폼 기본
+  createdAt: Date;
+}
+
+// ============ D-8: 세금계산서/정산서 ============
+
+export type TaxInvoiceStatus = 'pending' | 'issued' | 'failed' | 'cancelled';
+
+export interface TaxInvoice {
+  id: string;
+  settlementId: string;
+  mallId: string;
+  mallName: string;
+  issuerInfo: BusinessInfo;      // 발행자 (플랫폼)
+  recipientInfo: BusinessInfo;   // 수신자 (몰)
+  period: { startDate: Date; endDate: Date };
+  supplyAmount: number;          // 공급가액
+  taxAmount: number;             // 세액
+  totalAmount: number;           // 합계
+  status: TaxInvoiceStatus;
+  externalId: string | null;     // 팝빌/바로빌 외부 ID
+  issueDate: Date | null;
+  pdfUrl: string | null;
+  createdAt: Date;
+}
+
+export interface SettlementReport {
+  id: string;
+  settlementId: string;
+  mallId: string;
+  mallName: string;
+  period: { startDate: Date; endDate: Date };
+  reportData: SettlementReportData;
+  pdfUrl: string | null;
+  generatedAt: Date;
+  createdAt: Date;
+}
+
+export interface SettlementReportData {
+  totalSales: number;
+  totalOrders: number;
+  platformCommission: number;
+  pgFees: number;
+  referralCommission: number;
+  netAmount: number;
+  orderBreakdown: Array<{
+    orderId: string;
+    orderNumber: string;
+    productName: string;
+    amount: number;
+    commission: number;
+    date: Date;
+  }>;
 }

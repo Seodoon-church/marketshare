@@ -1,9 +1,11 @@
 'use client';
 
-import { useState } from 'react';
-import Link from 'next/link';
+import { useEffect, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils/cn';
+import { LogoIcon } from '@/components/common/Logo';
+import { useAuthStore } from '@/store/auth-store';
+import { getMallById } from '@/lib/services/mall-service';
 import {
   HomeIcon,
   BuildingStorefrontIcon,
@@ -22,6 +24,11 @@ import {
   XMarkIcon,
   SwatchIcon,
   TruckIcon,
+  TicketIcon,
+  TrophyIcon,
+  LinkIcon,
+  VideoCameraIcon,
+  PlayCircleIcon,
 } from '@heroicons/react/24/outline';
 
 interface SidebarItem {
@@ -30,34 +37,177 @@ interface SidebarItem {
   icon: React.ComponentType<{ className?: string }>;
 }
 
-const platformAdminItems: SidebarItem[] = [
-  { label: '대시보드', href: '/admin', icon: HomeIcon },
-  { label: '분양몰 관리', href: '/admin/malls', icon: BuildingStorefrontIcon },
-  { label: '전체 상품', href: '/admin/products', icon: CubeIcon },
-  { label: '전체 주문', href: '/admin/orders', icon: ShoppingCartIcon },
-  { label: '회원 관리', href: '/admin/users', icon: UsersIcon },
-  { label: '카테고리', href: '/admin/categories', icon: TagIcon },
-  { label: '브랜드', href: '/admin/brands', icon: SparklesIcon },
-  { label: '배너 관리', href: '/admin/banners', icon: PhotoIcon },
-  { label: '테마 관리', href: '/admin/themes', icon: SwatchIcon },
-  { label: '게시판', href: '/admin/boards', icon: ChatBubbleLeftRightIcon },
-  { label: '분양 신청', href: '/admin/franchise', icon: DocumentTextIcon },
-  { label: '정산 관리', href: '/admin/payments', icon: CurrencyDollarIcon },
-  { label: '통계/분석', href: '/admin/analytics', icon: ChartBarIcon },
-  { label: '설정', href: '/admin/settings', icon: Cog6ToothIcon },
+interface SidebarGroup {
+  title: string;
+  items: SidebarItem[];
+}
+
+// ──── 플랫폼 관리자 ────
+
+const platformAdminGroups: SidebarGroup[] = [
+  {
+    title: '',
+    items: [
+      { label: '대시보드', href: '/admin', icon: HomeIcon },
+    ],
+  },
+  {
+    title: '회원관리',
+    items: [
+      { label: '회원 정보관리', href: '/admin/users', icon: UsersIcon },
+    ],
+  },
+  {
+    title: '분양몰관리',
+    items: [
+      { label: '분양몰 전체목록', href: '/admin/malls', icon: BuildingStorefrontIcon },
+      { label: '분양 신청관리', href: '/admin/franchise', icon: DocumentTextIcon },
+      { label: '수수료/정산', href: '/admin/settlements', icon: CurrencyDollarIcon },
+    ],
+  },
+  {
+    title: '공급사관리',
+    items: [
+      { label: '공급사 리스트', href: '/admin/suppliers', icon: TruckIcon },
+      { label: '세금계산서', href: '/admin/tax-invoices', icon: DocumentTextIcon },
+    ],
+  },
+  {
+    title: '상품관리',
+    items: [
+      { label: '전체 상품관리', href: '/admin/products', icon: CubeIcon },
+      { label: '카테고리 관리', href: '/admin/categories', icon: TagIcon },
+    ],
+  },
+  {
+    title: '주문관리',
+    items: [
+      { label: '주문 리스트', href: '/admin/orders', icon: ShoppingCartIcon },
+    ],
+  },
+  {
+    title: '통계분석',
+    items: [
+      { label: '통계/분석', href: '/admin/analytics', icon: ChartBarIcon },
+    ],
+  },
+  {
+    title: '고객지원',
+    items: [
+      { label: '게시판 관리', href: '/admin/boards', icon: ChatBubbleLeftRightIcon },
+      { label: '쿠폰 관리', href: '/admin/coupons', icon: TicketIcon },
+      { label: '알림 관리', href: '/admin/notifications', icon: ChatBubbleLeftRightIcon },
+    ],
+  },
+  {
+    title: '디자인관리',
+    items: [
+      { label: '배너 관리', href: '/admin/banners', icon: PhotoIcon },
+      { label: '테마 관리', href: '/admin/themes', icon: SwatchIcon },
+    ],
+  },
+  {
+    title: '환경설정',
+    items: [
+      { label: '설정', href: '/admin/settings', icon: Cog6ToothIcon },
+    ],
+  },
 ];
 
-const mallAdminItems: SidebarItem[] = [
-  { label: '대시보드', href: '/mall-admin', icon: HomeIcon },
-  { label: '상품 관리', href: '/mall-admin/products', icon: CubeIcon },
-  { label: '주문 관리', href: '/mall-admin/orders', icon: ShoppingCartIcon },
-  { label: '카테고리', href: '/mall-admin/categories', icon: TagIcon },
-  { label: '배너 관리', href: '/mall-admin/banners', icon: PhotoIcon },
-  { label: '게시판', href: '/mall-admin/boards', icon: ChatBubbleLeftRightIcon },
-  { label: '배송 관리', href: '/mall-admin/shipping', icon: TruckIcon },
-  { label: '통계', href: '/mall-admin/analytics', icon: ChartBarIcon },
-  { label: '몰 설정', href: '/mall-admin/settings', icon: Cog6ToothIcon },
-];
+// ──── 몰 관리자 (동적 - 몰 타입에 따라 메뉴 변경) ────
+
+type MallType = 'headquarters' | 'franchisee' | 'independent';
+
+function getMallAdminGroups(mallType: MallType): SidebarGroup[] {
+  const groups: SidebarGroup[] = [
+    {
+      title: '',
+      items: [
+        { label: '대시보드', href: '/mall-admin', icon: HomeIcon },
+      ],
+    },
+  ];
+
+  // HQ-only: 분양 관리 group
+  if (mallType === 'headquarters') {
+    groups.push({
+      title: '분양 관리',
+      items: [
+        { label: '가맹점 목록', href: '/mall-admin/franchise/malls', icon: BuildingStorefrontIcon },
+        { label: '분양 신청관리', href: '/mall-admin/franchise/applications', icon: DocumentTextIcon },
+        { label: '네트워크 상품', href: '/mall-admin/franchise/products', icon: LinkIcon },
+      ],
+    });
+  }
+
+  // Products & Orders group
+  const productItems: SidebarItem[] = [
+    { label: '상품 관리', href: '/mall-admin/products', icon: CubeIcon },
+  ];
+  // Franchisee-only: 본사 상품 관리
+  if (mallType === 'franchisee') {
+    productItems.push({ label: '본사 상품 관리', href: '/mall-admin/headquarters-products', icon: LinkIcon });
+  }
+  productItems.push(
+    { label: '주문 관리', href: '/mall-admin/orders', icon: ShoppingCartIcon },
+    { label: '카테고리', href: '/mall-admin/categories', icon: TagIcon },
+    { label: '배송 관리', href: '/mall-admin/shipping', icon: TruckIcon },
+  );
+  groups.push({ title: '상품 · 주문', items: productItems });
+
+  // Members & Marketing
+  groups.push({
+    title: '회원 · 마케팅',
+    items: [
+      { label: '회원 관리', href: '/mall-admin/members', icon: UsersIcon },
+      { label: '회원등급', href: '/mall-admin/grades', icon: TrophyIcon },
+      { label: '포인트 관리', href: '/mall-admin/points', icon: CurrencyDollarIcon },
+      { label: '쿠폰 관리', href: '/mall-admin/coupons', icon: TicketIcon },
+    ],
+  });
+
+  // Content
+  groups.push({
+    title: '콘텐츠',
+    items: [
+      { label: '배너 관리', href: '/mall-admin/banners', icon: PhotoIcon },
+      { label: '게시판', href: '/mall-admin/boards', icon: ChatBubbleLeftRightIcon },
+      { label: '알림 설정', href: '/mall-admin/notifications/history', icon: ChatBubbleLeftRightIcon },
+    ],
+  });
+
+  // Live Commerce
+  groups.push({
+    title: '라이브 커머스',
+    items: [
+      { label: '라이브 관리', href: '/mall-admin/live', icon: VideoCameraIcon },
+      { label: '다시보기', href: '/mall-admin/live/replays', icon: PlayCircleIcon },
+    ],
+  });
+
+  // Settlement & Analytics - HQ gets extra "가맹점 정산"
+  const settlementItems: SidebarItem[] = [
+    { label: '정산 내역', href: '/mall-admin/settlements', icon: CurrencyDollarIcon },
+  ];
+  if (mallType === 'headquarters') {
+    settlementItems.push({ label: '가맹점 정산', href: '/mall-admin/franchise/settlements', icon: CurrencyDollarIcon });
+  }
+  settlementItems.push(
+    { label: '수수료 분석', href: '/mall-admin/settlements/commission', icon: ChartBarIcon },
+    { label: '통계', href: '/mall-admin/analytics', icon: ChartBarIcon },
+  );
+  groups.push({ title: '정산 · 분석', items: settlementItems });
+
+  // Settings
+  groups.push({
+    title: '',
+    items: [
+      { label: '몰 설정', href: '/mall-admin/settings', icon: Cog6ToothIcon },
+    ],
+  });
+
+  return groups;
+}
 
 interface AdminSidebarProps {
   role: 'platform_admin' | 'mall_owner';
@@ -67,84 +217,116 @@ export function AdminSidebar({ role }: AdminSidebarProps) {
   const pathname = usePathname();
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
+  const [mallType, setMallType] = useState<MallType>('independent');
+  const user = useAuthStore((s) => s.user);
 
-  const items = role === 'platform_admin' ? platformAdminItems : mallAdminItems;
+  useEffect(() => {
+    if (role !== 'mall_owner' || !user?.ownedMallIds?.length) return;
+
+    getMallById(user.ownedMallIds[0]).then((mall) => {
+      if (!mall) return;
+      if (mall.childMallIds && mall.childMallIds.length > 0) {
+        setMallType('headquarters');
+      } else if (mall.parentMallId) {
+        setMallType('franchisee');
+      } else {
+        setMallType('independent');
+      }
+    }).catch(() => {});
+  }, [role, user?.ownedMallIds]);
+
+  const groups = role === 'platform_admin' ? platformAdminGroups : getMallAdminGroups(mallType);
   const title = role === 'platform_admin' ? '플랫폼 관리' : '몰 관리';
 
   const sidebar = (
     <div
       className={cn(
-        'flex h-full flex-col bg-white border-r border-gray-100 transition-all duration-300',
+        'flex h-full flex-col transition-all duration-300',
         isCollapsed ? 'w-[68px]' : 'w-[260px]'
       )}
+      style={{ backgroundColor: '#1a6b4e' }}
     >
       {/* Logo */}
-      <div className="flex h-16 items-center justify-between border-b border-gray-100 px-4">
+      <div className="flex h-16 items-center justify-between px-4" style={{ borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
         {!isCollapsed && (
-          <Link href="/" className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-primary-dark">
-              <span className="text-sm font-bold text-white">M</span>
-            </div>
+          <a href="/" className="flex items-center gap-2">
+            <LogoIcon className="h-8 w-8 flex-shrink-0" />
             <div>
-              <p className="text-sm font-bold text-gray-900">MarketShare</p>
-              <p className="text-[10px] text-gray-400">{title}</p>
+              <p className="text-sm font-bold text-white">MarketShare</p>
+              <p className="text-[10px] text-white/50">{title}</p>
             </div>
-          </Link>
+          </a>
         )}
         <button
           onClick={() => setIsCollapsed(!isCollapsed)}
-          className="hidden rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 lg:block"
+          className="hidden rounded-lg p-1.5 text-white/50 hover:bg-white/10 hover:text-white lg:block"
         >
           <Bars3Icon className="h-5 w-5" />
         </button>
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 overflow-y-auto p-3">
-        <ul className="space-y-0.5">
-          {items.map((item) => {
-            const isActive = pathname === item.href ||
-              (item.href !== '/admin' && item.href !== '/mall-admin' && pathname.startsWith(item.href));
+      <nav className="flex-1 overflow-y-auto px-3 py-2">
+        {groups.map((group, gi) => (
+          <div key={gi}>
+            {/* Group title + separator */}
+            {group.title && !isCollapsed && (
+              <div className="mt-5 mb-1.5 px-3">
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-white/30">
+                  {group.title}
+                </p>
+              </div>
+            )}
+            {group.title && isCollapsed && (
+              <div className="my-2 mx-2 border-t border-white/10" />
+            )}
 
-            return (
-              <li key={item.href}>
-                <Link
-                  href={item.href}
-                  className={cn(
-                    'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all',
-                    isActive
-                      ? 'bg-primary/5 text-primary'
-                      : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-                  )}
-                  title={isCollapsed ? item.label : undefined}
-                >
-                  <item.icon
-                    className={cn(
-                      'h-5 w-5 flex-shrink-0',
-                      isActive ? 'text-primary' : 'text-gray-400'
-                    )}
-                  />
-                  {!isCollapsed && <span>{item.label}</span>}
-                  {isActive && !isCollapsed && (
-                    <div className="ml-auto h-1.5 w-1.5 rounded-full bg-primary" />
-                  )}
-                </Link>
-              </li>
-            );
-          })}
-        </ul>
+            <ul className="space-y-0.5">
+              {group.items.map((item) => {
+                const isActive = pathname === item.href ||
+                  (item.href !== '/admin' && item.href !== '/mall-admin' && pathname.startsWith(item.href));
+
+                return (
+                  <li key={item.href}>
+                    <a
+                      href={item.href}
+                      className={cn(
+                        'flex items-center gap-3 rounded-lg px-3 py-2 text-[13px] font-medium transition-all cursor-pointer',
+                        isActive
+                          ? 'bg-white/15 text-white'
+                          : 'text-white/70 hover:bg-white/8 hover:text-white'
+                      )}
+                      title={isCollapsed ? item.label : undefined}
+                    >
+                      <item.icon
+                        className={cn(
+                          'h-[18px] w-[18px] flex-shrink-0',
+                          isActive ? 'text-white' : 'text-white/45'
+                        )}
+                      />
+                      {!isCollapsed && <span>{item.label}</span>}
+                      {isActive && !isCollapsed && (
+                        <div className="ml-auto h-1.5 w-1.5 rounded-full" style={{ backgroundColor: '#03C75A' }} />
+                      )}
+                    </a>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        ))}
       </nav>
 
       {/* Bottom */}
       {!isCollapsed && (
-        <div className="border-t border-gray-100 p-4">
-          <Link
+        <div className="p-4" style={{ borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+          <a
             href="/"
-            className="flex items-center gap-2 text-sm text-gray-500 hover:text-primary"
+            className="flex items-center gap-2 text-sm text-white/50 hover:text-white"
           >
             <HomeIcon className="h-4 w-4" />
             사이트로 돌아가기
-          </Link>
+          </a>
         </div>
       )}
     </div>

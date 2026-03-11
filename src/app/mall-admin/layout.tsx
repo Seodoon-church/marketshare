@@ -1,7 +1,10 @@
+import type { Metadata } from 'next';
 import { AdminSidebar } from '@/components/layout/AdminSidebar';
 
-export const metadata = {
+export const metadata: Metadata = {
   title: '몰 관리자',
+  description:
+    '내 쇼핑몰을 관리하는 관리자 대시보드입니다. 상품 등록, 주문 처리, 매출 통계, 재고 관리를 편리하게 할 수 있습니다.',
 };
 
 export default function MallAdminLayout({

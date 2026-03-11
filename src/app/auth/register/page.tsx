@@ -1,17 +1,17 @@
 'use client';
 
 import { useState } from 'react';
-import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+
 import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from '@/lib/firebase/config';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
+import { Logo } from '@/components/common/Logo';
 import { EyeIcon, EyeSlashIcon, CheckIcon } from '@heroicons/react/24/outline';
 
 export default function RegisterPage() {
-  const router = useRouter();
+
   const [form, setForm] = useState({
     name: '',
     email: '',
@@ -111,7 +111,7 @@ export default function RegisterPage() {
         updatedAt: serverTimestamp(),
       });
 
-      router.push('/');
+      window.location.href = '/';
     } catch (err: any) {
       const code = err?.code;
       if (code === 'auth/email-already-in-use') {
@@ -132,14 +132,7 @@ export default function RegisterPage() {
     <div className="flex min-h-screen">
       {/* Left - Branding */}
       <div className="hidden w-1/2 bg-gradient-to-br from-gray-900 via-gray-800 to-primary-dark lg:flex lg:flex-col lg:justify-between lg:p-12">
-        <Link href="/" className="flex items-center gap-2">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/20 backdrop-blur-sm">
-            <span className="text-xl font-bold text-white">M</span>
-          </div>
-          <span className="text-xl font-bold text-white">
-            Market<span className="text-blue-300">Share</span>
-          </span>
-        </Link>
+        <Logo size="md" variant="white" />
 
         <div>
           <h2 className="text-4xl font-bold leading-tight text-white">
@@ -170,22 +163,15 @@ export default function RegisterPage() {
         <div className="w-full max-w-md">
           {/* Mobile Logo */}
           <div className="mb-8 lg:hidden">
-            <Link href="/" className="flex items-center gap-2">
-              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-primary-dark shadow-md">
-                <span className="text-lg font-bold text-white">M</span>
-              </div>
-              <span className="text-xl font-bold text-gray-900">
-                Market<span className="text-primary">Share</span>
-              </span>
-            </Link>
+            <Logo size="md" />
           </div>
 
           <h1 className="text-2xl font-bold text-gray-900">회원가입</h1>
           <p className="mt-2 text-sm text-gray-500">
             이미 계정이 있으신가요?{' '}
-            <Link href="/auth/login" className="font-medium text-primary hover:underline">
+            <a href="/auth/login" className="font-medium text-primary hover:underline">
               로그인
-            </Link>
+            </a>
           </p>
 
           {error && (
@@ -335,10 +321,10 @@ export default function RegisterPage() {
           </div>
 
           <div className="space-y-2.5">
-            <Button variant="kakao" fullWidth size="lg" type="button">
+            <Button variant="kakao" fullWidth size="lg" type="button" onClick={() => { alert('소셜 로그인은 준비 중입니다. 이메일로 가입해주세요.'); }}>
               카카오로 시작하기
             </Button>
-            <Button variant="naver" fullWidth size="lg" type="button">
+            <Button variant="naver" fullWidth size="lg" type="button" onClick={() => { alert('소셜 로그인은 준비 중입니다. 이메일로 가입해주세요.'); }}>
               네이버로 시작하기
             </Button>
           </div>

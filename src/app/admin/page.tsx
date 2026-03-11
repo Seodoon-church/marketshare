@@ -1,5 +1,6 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import { Card, CardTitle } from '@/components/ui/Card';
 import {
   BuildingStorefrontIcon,
@@ -13,65 +14,163 @@ import {
 } from '@heroicons/react/24/outline';
 import { formatKRW } from '@/lib/utils/format';
 import { Badge } from '@/components/ui/Badge';
+import { FullPageLoader } from '@/components/ui/LoadingSpinner';
+import { useAuth } from '@/lib/hooks/useAuth';
+import { getAllOrders } from '@/lib/services/order-service';
+import { getMalls } from '@/lib/services/mall-service';
+import { getFranchiseApplications } from '@/lib/services/franchise-service';
+import type { Order, Mall, FranchiseApplication } from '@/types';
 
-const stats = [
-  {
-    label: '오늘 매출',
-    value: formatKRW(2850000),
-    change: '+12.5%',
-    up: true,
-    icon: CurrencyDollarIcon,
-    color: 'from-emerald-500 to-teal-500',
-  },
-  {
-    label: '신규 주문',
-    value: '47건',
-    change: '+8.3%',
-    up: true,
-    icon: ShoppingCartIcon,
-    color: 'from-blue-500 to-cyan-500',
-  },
-  {
-    label: '활성 분양몰',
-    value: '53개',
-    change: '+2',
-    up: true,
-    icon: BuildingStorefrontIcon,
-    color: 'from-violet-500 to-purple-500',
-  },
-  {
-    label: '전체 회원',
-    value: '1,284명',
-    change: '+24',
-    up: true,
-    icon: UsersIcon,
-    color: 'from-amber-500 to-orange-500',
-  },
-];
-
-const recentOrders = [
-  { id: 'MS-20260307-A1B2C', mall: '스타일몰', customer: '김민수', amount: 89000, status: 'paid', time: '5분 전' },
-  { id: 'MS-20260307-D3E4F', mall: '건강마켓', customer: '이영희', amount: 45000, status: 'preparing', time: '12분 전' },
-  { id: 'MS-20260307-G5H6I', mall: '핸드메이드샵', customer: '박지훈', amount: 159000, status: 'shipped', time: '25분 전' },
-  { id: 'MS-20260307-J7K8L', mall: '스타일몰', customer: '최수진', amount: 38000, status: 'delivered', time: '1시간 전' },
-  { id: 'MS-20260307-M9N0O', mall: '테크스토어', customer: '정현우', amount: 290000, status: 'paid', time: '2시간 전' },
-];
-
-const topMalls = [
-  { name: '스타일몰', revenue: 12500000, orders: 156, growth: 15.2 },
-  { name: '건강마켓', revenue: 8900000, orders: 98, growth: 8.7 },
-  { name: '핸드메이드샵', revenue: 6700000, orders: 87, growth: 22.1 },
-  { name: '테크스토어', revenue: 5200000, orders: 45, growth: -3.2 },
-  { name: '뷰티몰', revenue: 4800000, orders: 67, growth: 11.5 },
-];
-
-const pendingApplications = [
-  { name: '김철수', mallName: '패션왕국', theme: 'shop', date: '2026.03.07' },
-  { name: '이은정', mallName: '수제공방', theme: 'service', date: '2026.03.06' },
-  { name: '박태호', mallName: '로컬맛집', theme: 'restaurant', date: '2026.03.06' },
-];
+function getRelativeTime(date: Date): string {
+  const diff = Date.now() - date.getTime();
+  const minutes = Math.floor(diff / 60000);
+  if (minutes < 60) return `${minutes}분 전`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}시간 전`;
+  return `${Math.floor(hours / 24)}일 전`;
+}
 
 export default function AdminDashboard() {
+  const { user, isLoading: authLoading, isAdmin } = useAuth();
+
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [malls, setMalls] = useState<Mall[]>([]);
+  const [applications, setApplications] = useState<FranchiseApplication[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // Admin auth check
+  useEffect(() => {
+    if (!authLoading && (!user || !isAdmin)) {
+      window.location.href = '/';
+    }
+  }, [authLoading, user, isAdmin]);
+
+  // Fetch data
+  useEffect(() => {
+    if (authLoading || !isAdmin) return;
+
+    async function fetchData() {
+      setLoading(true);
+      try {
+        const [orderResult, mallResult, appResult] = await Promise.all([
+          getAllOrders({ limit: 20 }),
+          getMalls(),
+          getFranchiseApplications({ status: 'pending' }),
+        ]);
+        setOrders(orderResult.orders);
+        setMalls(mallResult);
+        setApplications(appResult);
+      } catch (error) {
+        console.error('Dashboard data fetch error:', error);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    fetchData();
+  }, [authLoading, isAdmin]);
+
+  if (authLoading || loading) {
+    return <FullPageLoader message="대시보드 로딩 중..." />;
+  }
+
+  if (!user || !isAdmin) {
+    return null;
+  }
+
+  // Compute stats
+  const today = new Date();
+  const paidStatuses = ['paid', 'preparing', 'shipped', 'delivered'];
+
+  const todayOrders = orders.filter((o) => {
+    const orderDate = o.createdAt instanceof Date ? o.createdAt : new Date(o.createdAt);
+    return (
+      orderDate.getFullYear() === today.getFullYear() &&
+      orderDate.getMonth() === today.getMonth() &&
+      orderDate.getDate() === today.getDate() &&
+      paidStatuses.includes(o.status)
+    );
+  });
+
+  // 플랫폼 총 거래액 (GMV)
+  const todayGMV = todayOrders.reduce((sum, o) => sum + o.totalAmount, 0);
+
+  // 플랫폼 수수료 수입 (각 주문의 commission 합산)
+  const todayCommission = todayOrders.reduce((sum, o) => sum + (o.commission || 0), 0);
+
+  // 총 누적 수수료 (전체 주문 기준)
+  const totalCommission = orders
+    .filter((o) => paidStatuses.includes(o.status))
+    .reduce((sum, o) => sum + (o.commission || 0), 0);
+
+  const activeMalls = malls.filter((m) => m.status === 'active').length;
+
+  const stats = [
+    {
+      label: '플랫폼 거래액 (오늘)',
+      value: formatKRW(todayGMV),
+      change: `${todayOrders.length}건`,
+      up: true,
+      icon: ShoppingCartIcon,
+      color: 'from-blue-500 to-cyan-500',
+    },
+    {
+      label: '수수료 수입 (오늘)',
+      value: formatKRW(todayCommission),
+      change: totalCommission > 0 ? `누적 ${formatKRW(totalCommission)}` : '',
+      up: true,
+      icon: CurrencyDollarIcon,
+      color: 'from-emerald-500 to-teal-500',
+    },
+    {
+      label: '활성 분양몰',
+      value: `${activeMalls}개`,
+      change: `전체 ${malls.length}개`,
+      up: activeMalls > 0,
+      icon: BuildingStorefrontIcon,
+      color: 'from-violet-500 to-purple-500',
+    },
+    {
+      label: '분양 신청 대기',
+      value: `${applications.length}건`,
+      change: '',
+      up: applications.length > 0,
+      icon: UsersIcon,
+      color: 'from-amber-500 to-orange-500',
+    },
+  ];
+
+  // Recent orders: first 5
+  const recentOrders = orders.slice(0, 5).map((order) => ({
+    id: order.orderNumber,
+    mall: order.mallName || order.mallId,
+    customer: order.userName || 'N/A',
+    amount: order.totalAmount,
+    status: order.status,
+    time: getRelativeTime(order.createdAt instanceof Date ? order.createdAt : new Date(order.createdAt)),
+  }));
+
+  // Top malls: sort by productCount descending, take 5
+  const topMalls = [...malls]
+    .sort((a, b) => (b.totalRevenue || 0) - (a.totalRevenue || 0))
+    .slice(0, 5)
+    .map((mall) => ({
+      name: mall.name,
+      revenue: mall.totalRevenue || 0,
+      orders: mall.orderCount || 0,
+      growth: 0,
+    }));
+
+  // Pending applications (already filtered by status 'pending' in fetch)
+  const pendingApplications = applications.map((app) => ({
+    name: app.applicantName,
+    mallName: app.desiredMallName,
+    theme: app.desiredTheme,
+    date: app.createdAt instanceof Date
+      ? `${app.createdAt.getFullYear()}.${String(app.createdAt.getMonth() + 1).padStart(2, '0')}.${String(app.createdAt.getDate()).padStart(2, '0')}`
+      : new Date(app.createdAt).toLocaleDateString('ko-KR'),
+  }));
+
   return (
     <div className="space-y-6">
       {/* Stats */}

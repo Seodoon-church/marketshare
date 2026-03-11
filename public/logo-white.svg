@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 200" fill="none">
+  <defs>
+    <linearGradient id="iconBgW" x1="0" y1="0" x2="200" y2="200" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#60A5FA"/>
+      <stop offset="100%" stop-color="#3B82F6"/>
+    </linearGradient>
+  </defs>
+  <!-- Icon -->
+  <rect width="180" height="180" x="10" y="10" rx="40" fill="url(#iconBgW)"/>
+  <!-- Store roof -->
+  <path d="M55 82 L100 52 L145 82" stroke="white" stroke-width="10" stroke-linecap="round" stroke-linejoin="round" fill="none" opacity="0.5"/>
+  <!-- M letter -->
+  <path d="M50 150 L50 88 L100 128 L150 88 L150 150" stroke="white" stroke-width="16" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  <!-- Dots -->
+  <circle cx="50" cy="150" r="7" fill="white"/>
+  <circle cx="150" cy="150" r="7" fill="white"/>
+  <circle cx="100" cy="128" r="5.5" fill="white" opacity="0.7"/>
+  <!-- Text: MarketShare (all white) -->
+  <text x="218" y="132" font-family="'Pretendard Variable', 'Segoe UI', sans-serif" font-weight="800" font-size="80" fill="white">Market</text>
+  <text x="618" y="132" font-family="'Pretendard Variable', 'Segoe UI', sans-serif" font-weight="800" font-size="80" fill="rgba(255,255,255,0.8)">Share</text>
+</svg>

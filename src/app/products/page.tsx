@@ -1,79 +1,25 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Header } from '@/components/layout/Header';
 import { Footer } from '@/components/layout/Footer';
 import { ProductCard } from '@/components/product/ProductCard';
 import { Button } from '@/components/ui/Button';
+import { SkeletonCard } from '@/components/ui/Skeleton';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { useProducts } from '@/lib/hooks/useProducts';
+import { useGlobalCategories } from '@/lib/hooks/useCategories';
 import {
   FunnelIcon,
   Squares2X2Icon,
   ListBulletIcon,
   ChevronDownIcon,
   XMarkIcon,
+  ShoppingBagIcon,
+  ExclamationTriangleIcon,
 } from '@heroicons/react/24/outline';
-import type { Product } from '@/types';
+import type { ProductFilters } from '@/lib/services/product-service';
 
-// 데모 상품 데이터
-const demoProducts: Product[] = Array.from({ length: 12 }, (_, i) => ({
-  id: `product-${i + 1}`,
-  name: [
-    '프리미엄 면 티셔츠 (남녀공용)',
-    '핸드메이드 가죽 지갑',
-    '유기농 꿀 선물세트',
-    '무선 블루투스 이어폰 Pro',
-    '천연 아로마 디퓨저',
-    '스테인리스 텀블러 500ml',
-    '프리미엄 실크 스카프',
-    '수제 그래놀라 바',
-    '에코 캔버스 백팩',
-    '아이패드 케이스 (다크네이비)',
-    '수제 비누 기프트 박스',
-    '미니 LED 무드등',
-  ][i],
-  slug: `product-${i + 1}`,
-  description: '',
-  shortDescription: '',
-  price: [29000, 89000, 45000, 159000, 38000, 25000, 120000, 18000, 65000, 35000, 28000, 22000][i],
-  salePrice: i % 3 === 0 ? [23200, null, null, 127200, null, null, 96000, null, null, 28000, null, null][i] : null,
-  costPrice: 0,
-  currency: 'KRW',
-  categoryId: 'cat-1',
-  categoryName: ['패션', '패션', '식품', '전자기기', '리빙', '리빙', '패션', '식품', '패션', '전자기기', '뷰티', '리빙'][i],
-  categoryPath: [],
-  brandId: null,
-  brandName: null,
-  mallId: `mall-${(i % 3) + 1}`,
-  mallName: ['스타일몰', '핸드메이드샵', '건강마켓'][i % 3],
-  mallSlug: ['style-mall', 'handmade-shop', 'health-market'][i % 3],
-  supplierId: null,
-  supplierName: null,
-  images: [],
-  thumbnailUrl: '',
-  options: [],
-  variants: [],
-  stock: i === 5 ? 0 : 100,
-  sku: '',
-  weight: 0,
-  status: i === 5 ? 'soldout' : 'active',
-  isFeatured: i < 4,
-  isNew: i >= 8,
-  isFromPlatform: false,
-  tags: [],
-  viewCount: Math.floor(Math.random() * 500),
-  salesCount: Math.floor(Math.random() * 200),
-  reviewCount: Math.floor(Math.random() * 50),
-  averageRating: 3.5 + Math.random() * 1.5,
-  shippingInfo: { fee: i % 2 === 0 ? 0 : 3000, freeShippingThreshold: 50000, method: 'delivery', estimatedDays: 2 },
-  levelPrices: [],
-  seoTitle: '',
-  seoDescription: '',
-  createdAt: new Date(),
-  updatedAt: new Date(),
-  publishedAt: new Date(),
-}));
-
-const categories = ['전체', '패션', '전자기기', '식품', '리빙', '뷰티'];
 const sortOptions = [
   { value: 'new', label: '최신순' },
   { value: 'best', label: '인기순' },
@@ -82,15 +28,55 @@ const sortOptions = [
   { value: 'review', label: '리뷰많은순' },
 ];
 
+// Sort value to ProductFilters mapping
+const getSortFilters = (sortValue: string): Pick<ProductFilters, 'sortBy' | 'sortDirection'> => {
+  switch (sortValue) {
+    case 'new':
+      return { sortBy: 'createdAt', sortDirection: 'desc' };
+    case 'best':
+      return { sortBy: 'salesCount', sortDirection: 'desc' };
+    case 'price-low':
+      return { sortBy: 'price', sortDirection: 'asc' };
+    case 'price-high':
+      return { sortBy: 'price', sortDirection: 'desc' };
+    case 'review':
+      return { sortBy: 'salesCount', sortDirection: 'desc' }; // No reviewCount sort available
+    default:
+      return { sortBy: 'createdAt', sortDirection: 'desc' };
+  }
+};
+
 export default function ProductsPage() {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
-  const [selectedCategory, setSelectedCategory] = useState('전체');
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState('new');
   const [showFilter, setShowFilter] = useState(false);
 
-  const filteredProducts = selectedCategory === '전체'
-    ? demoProducts
-    : demoProducts.filter((p) => p.categoryName === selectedCategory);
+  // Fetch categories
+  const { categories, isLoading: categoriesLoading, error: categoriesError } = useGlobalCategories();
+
+  // Build product filters
+  const productFilters = useMemo<ProductFilters>(() => {
+    const sortFilters = getSortFilters(sortBy);
+    return {
+      ...sortFilters,
+      categoryId: selectedCategoryId || undefined,
+      status: 'active',
+      limit: 12,
+    };
+  }, [sortBy, selectedCategoryId]);
+
+  // Fetch products
+  const {
+    products,
+    isLoading: productsLoading,
+    error: productsError,
+    hasMore,
+    loadMore,
+  } = useProducts(productFilters);
+
+  const isLoading = productsLoading || categoriesLoading;
+  const error = productsError || categoriesError;
 
   return (
     <>
@@ -109,25 +95,45 @@ export default function ProductsPage() {
         <div className="mx-auto max-w-[var(--content-max-width)] px-4 py-6">
           {/* Category Tabs */}
           <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
-            {categories.map((cat) => (
-              <button
-                key={cat}
-                onClick={() => setSelectedCategory(cat)}
-                className={`whitespace-nowrap rounded-full px-4 py-2 text-sm font-medium transition-all ${
-                  selectedCategory === cat
-                    ? 'bg-gray-900 text-white shadow-sm'
-                    : 'bg-white text-gray-600 hover:bg-gray-100 border border-gray-200'
-                }`}
-              >
-                {cat}
-              </button>
-            ))}
+            <button
+              onClick={() => setSelectedCategoryId(null)}
+              className={`whitespace-nowrap rounded-full px-4 py-2 text-sm font-medium transition-all ${
+                selectedCategoryId === null
+                  ? 'bg-gray-900 text-white shadow-sm'
+                  : 'bg-white text-gray-600 hover:bg-gray-100 border border-gray-200'
+              }`}
+            >
+              전체
+            </button>
+            {categoriesLoading ? (
+              // Loading skeleton for categories
+              Array.from({ length: 5 }).map((_, i) => (
+                <div
+                  key={i}
+                  className="h-9 w-16 animate-pulse rounded-full bg-gray-200"
+                />
+              ))
+            ) : (
+              categories.map((cat) => (
+                <button
+                  key={cat.id}
+                  onClick={() => setSelectedCategoryId(cat.id)}
+                  className={`whitespace-nowrap rounded-full px-4 py-2 text-sm font-medium transition-all ${
+                    selectedCategoryId === cat.id
+                      ? 'bg-gray-900 text-white shadow-sm'
+                      : 'bg-white text-gray-600 hover:bg-gray-100 border border-gray-200'
+                  }`}
+                >
+                  {cat.name}
+                </button>
+              ))
+            )}
           </div>
 
           {/* Toolbar */}
           <div className="mt-4 flex items-center justify-between">
             <p className="text-sm text-gray-500">
-              총 <span className="font-semibold text-gray-900">{filteredProducts.length}</span>개 상품
+              총 <span className="font-semibold text-gray-900">{products.length}</span>개 상품
             </p>
             <div className="flex items-center gap-2">
               {/* Sort */}
@@ -177,29 +183,83 @@ export default function ProductsPage() {
             </div>
           </div>
 
-          {/* Product Grid */}
-          <div className={`mt-6 grid gap-4 ${
-            viewMode === 'grid'
-              ? 'grid-cols-2 md:grid-cols-3 lg:grid-cols-4'
-              : 'grid-cols-1 md:grid-cols-2'
-          }`}>
-            {filteredProducts.map((product) => (
-              <ProductCard
-                key={product.id}
-                product={product}
-                style={viewMode}
-                showMallName
+          {/* Error State */}
+          {error && (
+            <div className="mt-8">
+              <EmptyState
+                icon={<ExclamationTriangleIcon className="h-12 w-12" />}
+                title="상품을 불러올 수 없습니다"
+                description={error.message || '잠시 후 다시 시도해주세요.'}
+                action={{
+                  label: '다시 시도',
+                  onClick: () => window.location.reload(),
+                }}
               />
-            ))}
-          </div>
+            </div>
+          )}
 
-          {/* Load More */}
-          <div className="mt-10 flex justify-center">
-            <Button variant="outline" size="lg">
-              더보기
-              <ChevronDownIcon className="h-4 w-4" />
-            </Button>
-          </div>
+          {/* Loading State */}
+          {!error && isLoading && products.length === 0 && (
+            <div className={`mt-6 grid gap-4 ${
+              viewMode === 'grid'
+                ? 'grid-cols-2 md:grid-cols-3 lg:grid-cols-4'
+                : 'grid-cols-1 md:grid-cols-2'
+            }`}>
+              {Array.from({ length: 12 }).map((_, i) => (
+                <SkeletonCard key={i} hasImage />
+              ))}
+            </div>
+          )}
+
+          {/* Empty State */}
+          {!error && !isLoading && products.length === 0 && (
+            <div className="mt-8">
+              <EmptyState
+                icon={<ShoppingBagIcon className="h-12 w-12" />}
+                title="상품이 없습니다"
+                description="선택하신 조건에 맞는 상품이 없습니다. 다른 카테고리를 선택해보세요."
+                action={{
+                  label: '전체 상품 보기',
+                  onClick: () => setSelectedCategoryId(null),
+                }}
+              />
+            </div>
+          )}
+
+          {/* Product Grid */}
+          {!error && products.length > 0 && (
+            <>
+              <div className={`mt-6 grid gap-4 ${
+                viewMode === 'grid'
+                  ? 'grid-cols-2 md:grid-cols-3 lg:grid-cols-4'
+                  : 'grid-cols-1 md:grid-cols-2'
+              }`}>
+                {products.map((product) => (
+                  <ProductCard
+                    key={product.id}
+                    product={product}
+                    style={viewMode}
+                    showMallName
+                  />
+                ))}
+              </div>
+
+              {/* Load More */}
+              {hasMore && (
+                <div className="mt-10 flex justify-center">
+                  <Button
+                    variant="outline"
+                    size="lg"
+                    onClick={loadMore}
+                    disabled={productsLoading}
+                  >
+                    {productsLoading ? '로딩 중...' : '더보기'}
+                    <ChevronDownIcon className="h-4 w-4" />
+                  </Button>
+                </div>
+              )}
+            </>
+          )}
         </div>
       </main>
       <Footer />

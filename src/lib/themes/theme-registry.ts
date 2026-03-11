@@ -159,7 +159,9 @@ export const themes: Record<string, ThemeDefinition> = {
 };
 
 export function getThemeDefinition(themeId: string): ThemeDefinition | null {
-  return themes[themeId] || null;
+  // 'default' 테마를 'basic'으로 매핑 (기존 데이터 호환)
+  const resolvedId = themeId === 'default' ? 'basic' : themeId;
+  return themes[resolvedId] || null;
 }
 
 export function getAllThemes(): ThemeDefinition[] {

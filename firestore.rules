@@ -1,0 +1,382 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ============================================
+    // Helper Functions
+    // ============================================
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isAuthenticated()
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'platform_admin';
+    }
+
+    function isMallOwner(mallId) {
+      return isAuthenticated()
+        && get(/databases/$(database)/documents/malls/$(mallId)).data.ownerId == request.auth.uid;
+    }
+
+    // ============================================
+    // Users
+    // ============================================
+
+    match /users/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow create: if isOwner(userId);
+      // 본인은 platform_admin으로 역할 상승 불가
+      allow update: if isAdmin()
+        || (isOwner(userId) && request.resource.data.role != 'platform_admin');
+      allow delete: if isAdmin();
+
+      // Wishlist - owner only
+      match /wishlist/{itemId} {
+        allow read, write: if isOwner(userId);
+      }
+
+      // User's own order history (read only - orders are created by Cloud Functions or server)
+      match /orders/{orderId} {
+        allow read: if isOwner(userId);
+        allow write: if false;
+      }
+    }
+
+    // ============================================
+    // Malls
+    // ============================================
+
+    match /malls/{mallId} {
+      allow read: if true;
+      allow create: if isAuthenticated() && request.resource.data.ownerId == request.auth.uid;
+      allow update: if isMallOwner(mallId) || isAdmin();
+      allow delete: if isAdmin();
+
+      // Mall products - public read, mall owner can write
+      match /products/{productId} {
+        allow read: if true;
+        allow create: if isMallOwner(mallId);
+        allow update: if isMallOwner(mallId);
+        allow delete: if isMallOwner(mallId);
+      }
+
+      // Mall orders - mall owner reads all, customer reads own order
+      match /orders/{orderId} {
+        allow read: if isMallOwner(mallId)
+          || (isAuthenticated() && resource.data.userId == request.auth.uid);
+        allow write: if isMallOwner(mallId) || isAdmin();
+      }
+
+      // Mall categories - public read, mall owner can write
+      match /categories/{categoryId} {
+        allow read: if true;
+        allow write: if isMallOwner(mallId) || isAdmin();
+      }
+
+      // Shared products (분양몰 공유 상품 참조)
+      match /shared_products/{sharedId} {
+        allow read: if true;
+        allow write: if isMallOwner(mallId) || isAdmin();
+      }
+
+      // Mall banners - public read, mall owner can write
+      match /banners/{bannerId} {
+        allow read: if true;
+        allow write: if isMallOwner(mallId) || isAdmin();
+      }
+
+      // Mall boards - public read, mall owner can write
+      match /boards/{boardId} {
+        allow read: if true;
+        allow write: if isMallOwner(mallId) || isAdmin();
+      }
+
+      // Board posts - public read, authenticated users can create
+      match /boardPosts/{postId} {
+        allow read: if true;
+        allow create: if isAuthenticated();
+        allow update: if isAuthenticated()
+          && (resource.data.authorId == request.auth.uid || isMallOwner(mallId) || isAdmin());
+        allow delete: if isMallOwner(mallId) || isAdmin();
+      }
+    }
+
+    // ============================================
+    // Aggregated Products (synced from mall products by Cloud Functions)
+    // ============================================
+
+    match /products_aggregate/{productId} {
+      allow read: if true;
+      allow create: if isAuthenticated()
+        && request.resource.data.mallId != null
+        && isMallOwner(request.resource.data.mallId);
+      allow update: if isAuthenticated()
+        && resource.data.mallId != null
+        && isMallOwner(resource.data.mallId);
+      allow delete: if isAuthenticated()
+        && resource.data.mallId != null
+        && isMallOwner(resource.data.mallId);
+    }
+
+    // ============================================
+    // Global Categories
+    // ============================================
+
+    match /categories_global/{categoryId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // ============================================
+    // Brands
+    // ============================================
+
+    match /brands/{brandId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // ============================================
+    // Global Orders (admin dashboard)
+    // ============================================
+
+    match /orders_global/{orderId} {
+      allow read: if isAdmin();
+      allow write: if isAdmin();
+    }
+
+    // ============================================
+    // Franchise Applications
+    // ============================================
+
+    match /franchise_applications/{applicationId} {
+      allow create: if isAuthenticated();
+      allow read: if isAdmin()
+        || (isAuthenticated() && resource.data.applicantEmail == request.auth.token.email);
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // ============================================
+    // Settlements
+    // ============================================
+
+    match /settlements/{settlementId} {
+      allow read: if isAdmin()
+        || (isAuthenticated() && isMallOwner(resource.data.mallId));
+      allow write: if isAdmin();
+    }
+
+    // ============================================
+    // Platform Configuration
+    // ============================================
+
+    match /platform_config/{docId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // ============================================
+    // Platform Settings (PG설정, 사이트 설정 등)
+    // ============================================
+
+    match /settings/{docId} {
+      allow read: if isAdmin();
+      allow write: if isAdmin();
+    }
+
+    // ============================================
+    // Reviews
+    // ============================================
+
+    match /reviews/{reviewId} {
+      allow read: if true;
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      allow delete: if isAdmin();
+    }
+
+    // ============================================
+    // Points Ledger (적립금 내역)
+    // ============================================
+
+    match /points_ledger/{ledgerId} {
+      allow read: if isAuthenticated()
+        && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if false; // Cloud Functions에서만 생성
+      allow update, delete: if isAdmin();
+    }
+
+    // ============================================
+    // Coupons (쿠폰)
+    // ============================================
+
+    match /coupons/{couponId} {
+      allow read: if true;
+      allow create: if isAdmin()
+        || (isAuthenticated() && request.resource.data.mallId != null && isMallOwner(request.resource.data.mallId));
+      allow update: if isAdmin()
+        || (isAuthenticated() && resource.data.mallId != null && isMallOwner(resource.data.mallId));
+      allow delete: if isAdmin()
+        || (isAuthenticated() && resource.data.mallId != null && isMallOwner(resource.data.mallId));
+    }
+
+    match /coupon_usage/{usageId} {
+      allow read: if isAuthenticated()
+        && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if false; // Cloud Functions에서만 생성
+      allow update, delete: if false;
+    }
+
+    // User downloaded coupons
+    match /users/{userId}/coupons/{couponId} {
+      allow read: if isOwner(userId);
+      allow create: if isOwner(userId);
+      allow update, delete: if false;
+    }
+
+    // ============================================
+    // Mall Member Grades (회원등급)
+    // ============================================
+
+    match /malls/{mallId}/member_grades/{gradeId} {
+      allow read: if true;
+      allow write: if isMallOwner(mallId) || isAdmin();
+    }
+
+    // ============================================
+    // Mall Shipping Zones (배송존)
+    // ============================================
+
+    match /malls/{mallId}/shipping_zones/{zoneId} {
+      allow read: if true;
+      allow write: if isMallOwner(mallId) || isAdmin();
+    }
+
+    match /malls/{mallId}/shipping_templates/{templateId} {
+      allow read: if true;
+      allow write: if isMallOwner(mallId) || isAdmin();
+    }
+
+    // ============================================
+    // Shipping Carriers (택배사 - 플랫폼 레벨)
+    // ============================================
+
+    match /shipping_carriers/{carrierId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // ============================================
+    // Suppliers (공급사)
+    // ============================================
+
+    match /suppliers/{supplierId} {
+      allow read: if isAdmin()
+        || (isAuthenticated() && resource.data.userId == request.auth.uid);
+      allow create: if isAdmin();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    match /supplier_applications/{applicationId} {
+      allow create: if isAuthenticated();
+      allow read: if isAdmin()
+        || (isAuthenticated() && resource.data.applicantEmail == request.auth.token.email);
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    match /supplier_settlements/{settlementId} {
+      allow read: if isAdmin()
+        || (isAuthenticated() && resource.data.supplierId != null
+            && get(/databases/$(database)/documents/suppliers/$(resource.data.supplierId)).data.userId == request.auth.uid);
+      allow write: if isAdmin();
+    }
+
+    // ============================================
+    // Notifications (알림)
+    // ============================================
+
+    match /notification_settings/{mallId} {
+      allow read: if isMallOwner(mallId) || isAdmin();
+      allow write: if isMallOwner(mallId) || isAdmin();
+    }
+
+    match /notification_history/{notificationId} {
+      allow read: if isAdmin()
+        || (isAuthenticated() && resource.data.mallId != null && isMallOwner(resource.data.mallId));
+      allow create: if false; // Cloud Functions only
+      allow update, delete: if false;
+    }
+
+    match /notification_templates/{templateId} {
+      allow read: if true;
+      allow write: if isAdmin()
+        || (isAuthenticated() && resource.data.mallId != null && isMallOwner(resource.data.mallId));
+    }
+
+    // ============================================
+    // Tax Invoices (세금계산서)
+    // ============================================
+
+    match /tax_invoices/{invoiceId} {
+      allow read: if isAdmin()
+        || (isAuthenticated() && isMallOwner(resource.data.mallId));
+      allow create: if isAdmin();
+      allow update: if isAdmin();
+      allow delete: if false;
+    }
+
+    // ============================================
+    // Settlement Reports (정산서)
+    // ============================================
+
+    match /settlement_reports/{reportId} {
+      allow read: if isAdmin()
+        || (isAuthenticated() && isMallOwner(resource.data.mallId));
+      allow create, update: if false; // Cloud Functions only
+      allow delete: if false;
+    }
+
+    // ============================================
+    // Live Sessions (라이브 커머스)
+    // ============================================
+
+    match /live_sessions/{sessionId} {
+      allow read: if true;
+      allow create: if isAuthenticated()
+        && request.resource.data.hostId == request.auth.uid;
+      allow update: if isAuthenticated()
+        && resource.data.hostId == request.auth.uid;
+      allow delete: if isAdmin()
+        || (isAuthenticated() && resource.data.hostId == request.auth.uid);
+
+      // 채팅 메시지
+      match /messages/{messageId} {
+        allow read: if true;
+        allow create: if isAuthenticated();
+        allow update, delete: if false;
+      }
+    }
+
+    // ============================================
+    // Bulk Operations (대량 처리)
+    // ============================================
+
+    match /bulk_operations/{operationId} {
+      allow read: if isAuthenticated()
+        && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isAuthenticated();
+      allow update: if false; // Cloud Functions only
+      allow delete: if isAdmin();
+    }
+  }
+}

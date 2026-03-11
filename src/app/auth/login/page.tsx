@@ -1,16 +1,16 @@
 'use client';
 
 import { useState } from 'react';
-import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { auth } from '@/lib/firebase/config';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
+import { Logo } from '@/components/common/Logo';
 import { EnvelopeIcon, LockClosedIcon, EyeIcon, EyeSlashIcon } from '@heroicons/react/24/outline';
 
 export default function LoginPage() {
-  const router = useRouter();
+
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -24,7 +24,7 @@ export default function LoginPage() {
 
     try {
       await signInWithEmailAndPassword(auth, email, password);
-      router.push('/');
+      window.location.href = '/';
     } catch (err: any) {
       const code = err?.code;
       if (code === 'auth/user-not-found' || code === 'auth/wrong-password' || code === 'auth/invalid-credential') {
@@ -43,14 +43,7 @@ export default function LoginPage() {
     <div className="flex min-h-screen">
       {/* Left - Branding */}
       <div className="hidden w-1/2 bg-gradient-to-br from-gray-900 via-gray-800 to-primary-dark lg:flex lg:flex-col lg:justify-between lg:p-12">
-        <Link href="/" className="flex items-center gap-2">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/20 backdrop-blur-sm">
-            <span className="text-xl font-bold text-white">M</span>
-          </div>
-          <span className="text-xl font-bold text-white">
-            Market<span className="text-blue-300">Share</span>
-          </span>
-        </Link>
+        <Logo size="md" variant="white" />
 
         <div>
           <h2 className="text-4xl font-bold leading-tight text-white">
@@ -74,22 +67,15 @@ export default function LoginPage() {
         <div className="w-full max-w-md">
           {/* Mobile Logo */}
           <div className="mb-8 lg:hidden">
-            <Link href="/" className="flex items-center gap-2">
-              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-primary-dark shadow-md">
-                <span className="text-lg font-bold text-white">M</span>
-              </div>
-              <span className="text-xl font-bold text-gray-900">
-                Market<span className="text-primary">Share</span>
-              </span>
-            </Link>
+            <Logo size="md" />
           </div>
 
           <h1 className="text-2xl font-bold text-gray-900">로그인</h1>
           <p className="mt-2 text-sm text-gray-500">
             계정이 없으신가요?{' '}
-            <Link href="/auth/register" className="font-medium text-primary hover:underline">
+            <a href="/auth/register" className="font-medium text-primary hover:underline">
               회원가입
-            </Link>
+            </a>
           </p>
 
           {error && (
@@ -137,9 +123,9 @@ export default function LoginPage() {
                 <input type="checkbox" className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary" />
                 <span className="text-sm text-gray-600">로그인 유지</span>
               </label>
-              <Link href="/auth/find-password" className="text-sm text-gray-500 hover:text-primary">
+              <a href="#" onClick={(e) => { e.preventDefault(); alert('비밀번호 찾기 기능은 준비 중입니다. 관리자에게 문의해주세요.'); }} className="text-sm text-gray-500 hover:text-primary">
                 비밀번호 찾기
-              </Link>
+              </a>
             </div>
 
             <Button type="submit" fullWidth size="lg" isLoading={isLoading}>
@@ -156,21 +142,21 @@ export default function LoginPage() {
 
           {/* Social Login */}
           <div className="space-y-2.5">
-            <Button variant="kakao" fullWidth size="lg" type="button">
+            <Button variant="kakao" fullWidth size="lg" type="button" onClick={() => { alert('소셜 로그인은 준비 중입니다. 이메일로 로그인해주세요.'); }}>
               <svg viewBox="0 0 24 24" className="h-5 w-5" fill="currentColor">
                 <path d="M12 3C6.48 3 2 6.36 2 10.44c0 2.62 1.75 4.93 4.38 6.24l-1.12 4.14c-.1.35.31.64.62.44l4.94-3.26c.38.04.77.06 1.18.06 5.52 0 10-3.36 10-7.5S17.52 3 12 3z"/>
               </svg>
               카카오 로그인
             </Button>
 
-            <Button variant="naver" fullWidth size="lg" type="button">
+            <Button variant="naver" fullWidth size="lg" type="button" onClick={() => { alert('소셜 로그인은 준비 중입니다. 이메일로 로그인해주세요.'); }}>
               <svg viewBox="0 0 24 24" className="h-5 w-5" fill="currentColor">
                 <path d="M16.273 12.845L7.376 0H0v24h7.727V11.155L16.624 24H24V0h-7.727z" transform="scale(0.6) translate(8,4)"/>
               </svg>
               네이버 로그인
             </Button>
 
-            <Button variant="outline" fullWidth size="lg" type="button">
+            <Button variant="outline" fullWidth size="lg" type="button" onClick={() => { alert('소셜 로그인은 준비 중입니다. 이메일로 로그인해주세요.'); }}>
               <svg viewBox="0 0 24 24" className="h-5 w-5">
                 <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 01-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4"/>
                 <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>

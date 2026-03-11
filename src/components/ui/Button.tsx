@@ -51,15 +51,32 @@ export interface ButtonProps
   extends ButtonHTMLAttributes<HTMLButtonElement>,
     VariantProps<typeof buttonVariants> {
   isLoading?: boolean;
+  href?: string;
 }
 
 const Button = forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, variant, size, fullWidth, isLoading, children, disabled, ...props }, ref) => {
+  ({ className, variant, size, fullWidth, isLoading, children, disabled, href, onClick, ...props }, ref) => {
+    const classes = cn(buttonVariants({ variant, size, fullWidth, className }));
+
+    // href가 있으면 <a> 태그로 렌더링
+    if (href) {
+      return (
+        <a
+          href={href}
+          className={classes}
+          onClick={onClick as unknown as React.MouseEventHandler<HTMLAnchorElement>}
+        >
+          {children}
+        </a>
+      );
+    }
+
     return (
       <button
-        className={cn(buttonVariants({ variant, size, fullWidth, className }))}
+        className={classes}
         ref={ref}
         disabled={disabled || isLoading}
+        onClick={onClick}
         {...props}
       >
         {isLoading && (

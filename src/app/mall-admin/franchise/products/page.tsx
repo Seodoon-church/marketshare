@@ -14,9 +14,12 @@ import {
   unshareProductFromAllFranchisees, toggleSharedProductVisibility,
 } from '@/lib/services/shared-product-service';
 import type { Mall, Product, SharedProduct } from '@/types';
+import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { db } from '@/lib/firebase/config';
 import {
   ShareIcon, CubeIcon, BuildingStorefrontIcon,
   EyeIcon, EyeSlashIcon, PhotoIcon,
+  SignalIcon,
 } from '@heroicons/react/24/outline';
 
 type ActiveTab = 'my-products' | 'franchisee-products';
@@ -99,6 +102,52 @@ export default function MallAdminFranchiseProductsPage() {
   };
 
   const sharedCount = myProducts.filter((p) => p.isSharedToNetwork).length;
+  const broadcastCount = myProducts.filter((p) => p.broadcastEnabled).length;
+
+  const handleBroadcastToggle = async (productId: string, enabled: boolean) => {
+    if (!mallId) return;
+    try {
+      setToggling(productId);
+      const productRef = doc(db, 'malls', mallId, 'products', productId);
+      await updateDoc(productRef, {
+        broadcastEnabled: enabled,
+        ...(enabled ? {} : { broadcastCommissionRate: null, broadcastSpecialPrice: null }),
+        updatedAt: serverTimestamp(),
+      });
+      setMyProducts((prev) => prev.map((p) =>
+        p.id === productId
+          ? { ...p, broadcastEnabled: enabled, ...(enabled ? {} : { broadcastCommissionRate: undefined, broadcastSpecialPrice: undefined }) }
+          : p
+      ));
+      toast({ type: 'success', message: enabled ? '방송가능 상태로 설정되었습니다.' : '방송가능 상태가 해제되었습니다.' });
+    } catch {
+      toast({ type: 'error', message: '방송 설정 변경 실패' });
+    } finally {
+      setToggling(null);
+    }
+  };
+
+  const handleBroadcastCommissionChange = async (productId: string, rate: number) => {
+    if (!mallId) return;
+    try {
+      const productRef = doc(db, 'malls', mallId, 'products', productId);
+      await updateDoc(productRef, { broadcastCommissionRate: rate, updatedAt: serverTimestamp() });
+      setMyProducts((prev) => prev.map((p) => (p.id === productId ? { ...p, broadcastCommissionRate: rate } : p)));
+    } catch {
+      toast({ type: 'error', message: '수수료율 변경 실패' });
+    }
+  };
+
+  const handleBroadcastSpecialPriceChange = async (productId: string, price: number | null) => {
+    if (!mallId) return;
+    try {
+      const productRef = doc(db, 'malls', mallId, 'products', productId);
+      await updateDoc(productRef, { broadcastSpecialPrice: price, updatedAt: serverTimestamp() });
+      setMyProducts((prev) => prev.map((p) => (p.id === productId ? { ...p, broadcastSpecialPrice: price } : p)));
+    } catch {
+      toast({ type: 'error', message: '방송특가 변경 실패' });
+    }
+  };
 
   if (authLoading || (loading && !mall)) return <div className="flex min-h-[400px] items-center justify-center"><LoadingSpinner size="lg" /></div>;
   if (mall?.parentMallId) return <div className="flex min-h-[400px] items-center justify-center"><p className="text-sm text-gray-500">본사(본부) 몰에서만 네트워크 상품을 관리할 수 있습니다.</p></div>;
@@ -111,7 +160,7 @@ export default function MallAdminFranchiseProductsPage() {
       </div>
 
       {/* Summary */}
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-3 gap-4">
         <Card>
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500 to-cyan-500 shadow-lg">
@@ -120,6 +169,17 @@ export default function MallAdminFranchiseProductsPage() {
             <div>
               <p className="text-xs text-gray-500">공유 중인 내 상품</p>
               <p className="text-xl font-bold text-gray-900">{sharedCount}개</p>
+            </div>
+          </div>
+        </Card>
+        <Card>
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 shadow-lg">
+              <SignalIcon className="h-5 w-5 text-white" />
+            </div>
+            <div>
+              <p className="text-xs text-gray-500">방송가능 상품</p>
+              <p className="text-xl font-bold text-gray-900">{broadcastCount}개</p>
             </div>
           </div>
         </Card>
@@ -166,6 +226,7 @@ export default function MallAdminFranchiseProductsPage() {
               </div>
             ) : myProducts.map((product) => {
               const shared = product.isSharedToNetwork ?? false;
+              const broadcast = product.broadcastEnabled ?? false;
               const busy = toggling === product.id;
               return (
                 <div key={product.id} className="flex items-center justify-between px-5 py-4 hover:bg-gray-50/50 transition-colors">
@@ -179,12 +240,61 @@ export default function MallAdminFranchiseProductsPage() {
                       </div>
                     </div>
                   </div>
-                  <div className="ml-4 flex items-center gap-3">
-                    {shared && <span className="text-xs text-emerald-600 font-medium">공유중</span>}
-                    <button onClick={() => handleToggleShare(product)} disabled={busy}
-                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${shared ? 'bg-emerald-500' : 'bg-gray-300'} ${busy ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}>
-                      <span className={`inline-block h-4 w-4 rounded-full bg-white shadow-sm transition-transform ${shared ? 'translate-x-6' : 'translate-x-1'}`} />
-                    </button>
+                  <div className="ml-4 flex items-center gap-3 flex-shrink-0">
+                    {/* Share toggle */}
+                    <div className="flex items-center gap-2 border-r border-gray-200 pr-3">
+                      {shared && <span className="text-xs text-emerald-600 font-medium">공유중</span>}
+                      <button onClick={() => handleToggleShare(product)} disabled={busy}
+                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${shared ? 'bg-emerald-500' : 'bg-gray-300'} ${busy ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}>
+                        <span className={`inline-block h-4 w-4 rounded-full bg-white shadow-sm transition-transform ${shared ? 'translate-x-6' : 'translate-x-1'}`} />
+                      </button>
+                    </div>
+                    {/* Broadcast toggle */}
+                    <div className="flex items-center gap-2">
+                      <span className={`text-xs font-medium ${broadcast ? 'text-purple-600' : 'text-gray-400'}`}>방송</span>
+                      <button onClick={() => handleBroadcastToggle(product.id, !broadcast)} disabled={busy}
+                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${broadcast ? 'bg-purple-500' : 'bg-gray-300'} ${busy ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}>
+                        <span className={`inline-block h-4 w-4 rounded-full bg-white shadow-sm transition-transform ${broadcast ? 'translate-x-6' : 'translate-x-1'}`} />
+                      </button>
+                      {broadcast && (
+                        <>
+                          <div className="flex items-center gap-1">
+                            <span className="text-xs text-gray-500">수수료</span>
+                            <input
+                              type="number"
+                              min={0}
+                              max={100}
+                              step={1}
+                              value={product.broadcastCommissionRate ?? ''}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                if (val === '') return;
+                                handleBroadcastCommissionChange(product.id, Number(val));
+                              }}
+                              placeholder="0"
+                              className="h-7 w-14 rounded border border-gray-300 px-1.5 text-xs text-center focus:border-purple-400 focus:outline-none focus:ring-1 focus:ring-purple-200"
+                            />
+                            <span className="text-xs text-gray-500">%</span>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <span className="text-xs text-gray-500">특가</span>
+                            <input
+                              type="number"
+                              min={0}
+                              step={100}
+                              value={product.broadcastSpecialPrice ?? ''}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                handleBroadcastSpecialPriceChange(product.id, val === '' ? null : Number(val));
+                              }}
+                              placeholder="-"
+                              className="h-7 w-20 rounded border border-gray-300 px-1.5 text-xs text-center focus:border-purple-400 focus:outline-none focus:ring-1 focus:ring-purple-200"
+                            />
+                            <span className="text-xs text-gray-500">원</span>
+                          </div>
+                        </>
+                      )}
+                    </div>
                   </div>
                 </div>
               );

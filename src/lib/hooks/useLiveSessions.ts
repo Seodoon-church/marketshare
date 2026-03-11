@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { getLiveSessions, getActiveLiveSession } from '@/lib/services/live-service';
+import { getLiveSessions, getActiveLiveSession, getChildMallLiveSessions, getActiveChildMallSessions } from '@/lib/services/live-service';
 import type { LiveSession, LiveSessionStatus } from '@/types/live';
 
 interface UseLiveSessionsReturn {
@@ -40,7 +40,8 @@ interface UseActiveLiveSessionReturn {
  */
 export function useLiveSessions(
   mallId: string | null,
-  status?: LiveSessionStatus
+  status?: LiveSessionStatus,
+  parentMallId?: string | null
 ): UseLiveSessionsReturn {
   const [sessions, setSessions] = useState<LiveSession[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -60,7 +61,8 @@ export function useLiveSessions(
         setIsLoading(true);
         setError(null);
 
-        const fetchedSessions = await getLiveSessions(mallId, status);
+        const mallIds = parentMallId ? [mallId, parentMallId] : mallId;
+        const fetchedSessions = await getLiveSessions(mallIds, status);
 
         if (isMounted) {
           setSessions(fetchedSessions);
@@ -79,7 +81,7 @@ export function useLiveSessions(
     return () => {
       isMounted = false;
     };
-  }, [mallId, status]);
+  }, [mallId, status, parentMallId]);
 
   return {
     sessions,
@@ -107,7 +109,7 @@ export function useLiveSessions(
  * );
  * ```
  */
-export function useActiveLiveSession(mallId: string | null): UseActiveLiveSessionReturn {
+export function useActiveLiveSession(mallId: string | null, parentMallId?: string | null): UseActiveLiveSessionReturn {
   const [session, setSession] = useState<LiveSession | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -124,7 +126,8 @@ export function useActiveLiveSession(mallId: string | null): UseActiveLiveSessio
       try {
         setIsLoading(true);
 
-        const activeSession = await getActiveLiveSession(mallId);
+        const mallIds = parentMallId ? [mallId, parentMallId] : mallId;
+        const activeSession = await getActiveLiveSession(mallIds);
 
         if (isMounted) {
           setSession(activeSession);
@@ -144,10 +147,101 @@ export function useActiveLiveSession(mallId: string | null): UseActiveLiveSessio
     return () => {
       isMounted = false;
     };
-  }, [mallId]);
+  }, [mallId, parentMallId]);
 
   return {
     session,
     isLoading,
   };
+}
+
+/**
+ * MCN Hub: Fetch live sessions from all child malls (celebrities)
+ */
+export function useMCNLiveSessions(
+  childMallIds: string[] | null,
+  status?: LiveSessionStatus
+): UseLiveSessionsReturn {
+  const [sessions, setSessions] = useState<LiveSession[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<Error | null>(null);
+
+  useEffect(() => {
+    if (!childMallIds || childMallIds.length === 0) {
+      setSessions([]);
+      setIsLoading(false);
+      return;
+    }
+
+    let isMounted = true;
+
+    const fetchSessions = async () => {
+      try {
+        setIsLoading(true);
+        setError(null);
+
+        const fetchedSessions = await getChildMallLiveSessions(childMallIds, status);
+
+        if (isMounted) {
+          setSessions(fetchedSessions);
+          setIsLoading(false);
+        }
+      } catch (err) {
+        if (isMounted) {
+          setError(err instanceof Error ? err : new Error('Failed to fetch MCN live sessions'));
+          setIsLoading(false);
+        }
+      }
+    };
+
+    fetchSessions();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [childMallIds?.join(','), status]);
+
+  return { sessions, isLoading, error };
+}
+
+/**
+ * MCN Hub: Get all currently active sessions from child malls
+ */
+export function useMCNActiveSessions(
+  childMallIds: string[] | null
+): { sessions: LiveSession[]; isLoading: boolean } {
+  const [sessions, setSessions] = useState<LiveSession[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    if (!childMallIds || childMallIds.length === 0) {
+      setSessions([]);
+      setIsLoading(false);
+      return;
+    }
+
+    let isMounted = true;
+
+    const fetchSessions = async () => {
+      try {
+        setIsLoading(true);
+        const activeSessions = await getActiveChildMallSessions(childMallIds);
+        if (isMounted) {
+          setSessions(activeSessions);
+          setIsLoading(false);
+        }
+      } catch {
+        if (isMounted) {
+          setSessions([]);
+          setIsLoading(false);
+        }
+      }
+    };
+
+    fetchSessions();
+
+    return () => { isMounted = false; };
+  }, [childMallIds?.join(',')]);
+
+  return { sessions, isLoading };
 }

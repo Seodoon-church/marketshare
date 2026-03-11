@@ -24,7 +24,7 @@ import {
   ExclamationTriangleIcon,
   VideoCameraIcon,
 } from '@heroicons/react/24/outline';
-import { useActiveLiveSession } from '@/lib/hooks/useLiveSessions';
+import { useActiveLiveSession, useMCNActiveSessions } from '@/lib/hooks/useLiveSessions';
 import { LiveBadge } from '@/components/live/LiveBadge';
 
 // ---- 배너 폴백 (Firestore에 배너가 없을 때 사용) ----
@@ -107,8 +107,14 @@ export default function MallHomeClient({ mallSlug: paramSlug }: { mallSlug: stri
   const [sharedProducts, setSharedProducts] = useState<Product[]>([]);
   const [sharedLoading, setSharedLoading] = useState(false);
 
-  // 라이브 커머스
-  const { session: activeLive } = useActiveLiveSession(mall?.id ?? null);
+  // 라이브 커머스 (본사 라이브도 함께 조회)
+  const { session: activeLive } = useActiveLiveSession(mall?.id ?? null, mall?.parentMallId ?? undefined);
+
+  // MCN 모드: 모든 셀럽(자식몰) 라이브 조회
+  const isMCN = !!(mall?.isMCN && mall?.childMallIds?.length);
+  const { sessions: mcnActiveSessions } = useMCNActiveSessions(
+    isMCN ? mall.childMallIds : null
+  );
 
   const basePath = `/malls/${mallSlug}`;
   const [currentBanner, setCurrentBanner] = useState(0);
@@ -344,8 +350,39 @@ export default function MallHomeClient({ mallSlug: paramSlug }: { mallSlug: stri
         </div>
       </section>
 
-      {/* ===== 라이브 방송중 ===== */}
-      {activeLive && (
+      {/* ===== 라이브 방송중 (MCN: 셀럽 다중 라이브) ===== */}
+      {isMCN && mcnActiveSessions.length > 0 && (
+        <section className="bg-gradient-to-r from-red-600 to-rose-600 py-6">
+          <div className="mx-auto max-w-[var(--content-max-width)] px-4">
+            <div className="flex items-center gap-2 mb-4">
+              <LiveBadge size="lg" />
+              <h2 className="text-xl font-bold text-white">지금 방송중인 셀럽</h2>
+              <span className="text-white/70 text-sm">{mcnActiveSessions.length}개 방송</span>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {mcnActiveSessions.map((session) => (
+                <a
+                  key={session.id}
+                  href={`/malls/${session.mallSlug}/live/${session.id}`}
+                  className="block rounded-xl bg-white/10 backdrop-blur-sm p-4 text-white hover:bg-white/20 transition-colors"
+                >
+                  <div className="flex items-center gap-3 mb-2">
+                    <LiveBadge size="sm" />
+                    <span className="font-semibold truncate">{session.mallName}</span>
+                  </div>
+                  <p className="font-bold truncate">{session.title}</p>
+                  <p className="text-sm text-white/70 mt-1">
+                    {session.viewerCount > 0 ? `${session.viewerCount.toLocaleString()}명 시청 중` : '방송 중'}
+                  </p>
+                </a>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* ===== 라이브 방송중 (일반 몰: 단일 라이브) ===== */}
+      {!isMCN && activeLive && (
         <section className="bg-gradient-to-r from-red-600 to-rose-600">
           <div className="mx-auto max-w-[var(--content-max-width)] px-4 py-4">
             <a
@@ -355,7 +392,10 @@ export default function MallHomeClient({ mallSlug: paramSlug }: { mallSlug: stri
               <div className="flex items-center gap-3">
                 <LiveBadge size="lg" />
                 <div>
-                  <p className="text-sm font-bold sm:text-base">{activeLive.title}</p>
+                  <p className="text-sm font-bold sm:text-base">
+                    {activeLive.mallId !== mall?.id && <span className="mr-1.5 inline-block rounded bg-white/20 px-1.5 py-0.5 text-[10px] font-semibold uppercase">본사</span>}
+                    {activeLive.title}
+                  </p>
                   <p className="text-xs text-white/70">
                     {activeLive.viewerCount > 0 && `${activeLive.viewerCount}명 시청 중 · `}
                     지금 라이브 방송 중입니다

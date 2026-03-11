@@ -47,6 +47,10 @@ export interface LiveSession {
   totalRevenue: number;
   chatMessageCount: number;
 
+  // MCN 매출 구분 (정산용)
+  ownProductRevenue?: number;         // 셀럽 자기상품 매출
+  parentProductRevenue?: number;      // 본사상품 매출
+
   createdAt: Date;
   updatedAt: Date;
 }

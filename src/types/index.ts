@@ -115,6 +115,8 @@ export interface Mall {
   franchiseEndDate: Date | null;
   // === 분양 설정 ===
   franchiseSettings?: FranchiseSettings | null;
+  // === MCN 모드 ===
+  isMCN?: boolean;
 }
 
 export interface BusinessInfo {
@@ -206,6 +208,10 @@ export interface Product {
   sourceProductId?: string | null;
   isSharedToNetwork?: boolean;
   networkVisibility?: 'all' | 'headquarters_only' | 'none';
+  // === MCN 라이브 방송 ===
+  broadcastEnabled?: boolean;           // "방송가능" 플래그 (본사가 설정)
+  broadcastCommissionRate?: number;     // 셀럽 판매수수료율 % (본사→셀럽 지급)
+  broadcastSpecialPrice?: number | null; // 방송 전용 특가
 }
 
 export interface ProductImage {

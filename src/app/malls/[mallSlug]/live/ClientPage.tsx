@@ -3,7 +3,7 @@
 import React from 'react';
 import { useMallSlug } from '@/lib/hooks/useMallSlug';
 import { useMallBySlug } from '@/lib/hooks/useMall';
-import { useLiveSessions, useActiveLiveSession } from '@/lib/hooks/useLiveSessions';
+import { useLiveSessions, useActiveLiveSession, useMCNLiveSessions } from '@/lib/hooks/useLiveSessions';
 import { FullPageLoader } from '@/components/ui/LoadingSpinner';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { LiveBadge } from '@/components/live/LiveBadge';
@@ -28,37 +28,53 @@ export default function MallLiveClientPage({
 
   const { data: mall, isLoading: mallLoading } = useMallBySlug(mallSlug);
   const { sessions, isLoading: sessionsLoading } = useLiveSessions(
-    mall?.id || null
+    mall?.id || null, undefined, mall?.parentMallId ?? undefined
   );
-  const { session: activeSession } = useActiveLiveSession(mall?.id || null);
+  const { session: activeSession } = useActiveLiveSession(mall?.id || null, mall?.parentMallId ?? undefined);
 
-  const isLoading = mallLoading || sessionsLoading;
+  // MCN 모드: 모든 셀럽(자식몰) 라이브 조회
+  const isMCN = !!(mall?.isMCN && mall?.childMallIds?.length);
+  const { sessions: mcnSessions, isLoading: mcnSessionsLoading } = useMCNLiveSessions(
+    isMCN ? mall.childMallIds : null
+  );
+
+  const isLoading = mallLoading || sessionsLoading || (isMCN && mcnSessionsLoading);
+
+  // MCN 모드일 때 MCN 세션 사용, 아니면 일반 세션 사용
+  const effectiveSessions = isMCN ? mcnSessions : sessions;
+
+  // MCN 모드에서 활성 세션 목록 (여러 셀럽 동시 방송 가능)
+  const mcnActiveSessions = React.useMemo(() => {
+    if (!isMCN || !mcnSessions) return [];
+    return mcnSessions.filter((s) => s.status === 'live');
+  }, [isMCN, mcnSessions]);
 
   // Categorize sessions
   const scheduledSessions = React.useMemo(() => {
-    if (!sessions) return [];
-    return sessions
+    if (!effectiveSessions) return [];
+    return effectiveSessions
       .filter((s) => s.status === 'scheduled')
       .sort(
         (a, b) =>
           new Date(a.scheduledAt).getTime() -
           new Date(b.scheduledAt).getTime()
       );
-  }, [sessions]);
+  }, [effectiveSessions]);
 
   const endedSessions = React.useMemo(() => {
-    if (!sessions) return [];
-    return sessions
+    if (!effectiveSessions) return [];
+    return effectiveSessions
       .filter((s) => s.status === 'ended')
       .sort(
         (a, b) =>
           new Date(b.endedAt || 0).getTime() -
           new Date(a.endedAt || 0).getTime()
       );
-  }, [sessions]);
+  }, [effectiveSessions]);
 
-  const handleSessionClick = (sessionId: string) => {
-    window.location.href = `/malls/${mallSlug}/live/${sessionId}`;
+  const handleSessionClick = (sessionId: string, sessionMallSlug?: string) => {
+    const targetSlug = sessionMallSlug || mallSlug;
+    window.location.href = `/malls/${targetSlug}/live/${sessionId}`;
   };
 
   // Show demo page for demo stores
@@ -81,7 +97,7 @@ export default function MallLiveClientPage({
   }
 
   const hasAnySessions =
-    activeSession || scheduledSessions.length > 0 || endedSessions.length > 0;
+    activeSession || mcnActiveSessions.length > 0 || scheduledSessions.length > 0 || endedSessions.length > 0;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -109,8 +125,34 @@ export default function MallLiveClientPage({
           />
         ) : (
           <div className="space-y-12">
-            {/* Active Live Session - Featured */}
-            {activeSession && (
+            {/* Active Live Sessions - MCN: multiple celebrity streams */}
+            {isMCN && mcnActiveSessions.length > 0 && (
+              <section>
+                <div className="flex items-center gap-2 mb-6">
+                  <LiveBadge />
+                  <h2 className="text-2xl font-bold text-gray-900">
+                    지금 라이브 중
+                  </h2>
+                  <span className="text-sm text-gray-500">{mcnActiveSessions.length}개 방송</span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {mcnActiveSessions.map((session) => (
+                    <SessionCard
+                      key={session.id}
+                      session={session}
+                      mallSlug={mallSlug}
+                      currentMallId={mall?.id}
+                      isMCN
+                      onClick={() => handleSessionClick(session.id, session.mallSlug)}
+                    />
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {/* Active Live Session - Non-MCN: single featured stream */}
+            {!isMCN && activeSession && (
               <section>
                 <div className="flex items-center gap-2 mb-6">
                   <LiveBadge />
@@ -139,6 +181,7 @@ export default function MallLiveClientPage({
 
                   <div className="p-6 sm:p-8">
                     <h3 className="text-2xl font-bold text-gray-900 mb-2 group-hover:text-purple-600 transition-colors">
+                      {activeSession.mallId !== mall?.id && <span className="mr-2 inline-block rounded bg-blue-100 px-2 py-0.5 text-xs font-semibold text-blue-700">본사 라이브</span>}
                       {activeSession.title}
                     </h3>
                     {activeSession.description && (
@@ -184,7 +227,9 @@ export default function MallLiveClientPage({
                       key={session.id}
                       session={session}
                       mallSlug={mallSlug}
-                      onClick={() => handleSessionClick(session.id)}
+                      currentMallId={mall?.id}
+                      isMCN={isMCN}
+                      onClick={() => handleSessionClick(session.id, isMCN ? session.mallSlug : undefined)}
                     />
                   ))}
                 </div>
@@ -207,7 +252,9 @@ export default function MallLiveClientPage({
                       key={session.id}
                       session={session}
                       mallSlug={mallSlug}
-                      onClick={() => handleSessionClick(session.id)}
+                      currentMallId={mall?.id}
+                      isMCN={isMCN}
+                      onClick={() => handleSessionClick(session.id, isMCN ? session.mallSlug : undefined)}
                     />
                   ))}
                 </div>
@@ -224,10 +271,14 @@ export default function MallLiveClientPage({
 function SessionCard({
   session,
   mallSlug,
+  currentMallId,
+  isMCN,
   onClick,
 }: {
   session: LiveSession;
   mallSlug: string;
+  currentMallId?: string;
+  isMCN?: boolean;
   onClick: () => void;
 }) {
   const formatDate = (date: Date | string) => {
@@ -290,7 +341,11 @@ function SessionCard({
       </div>
 
       <div className="p-4">
+        {(isMCN || (currentMallId && session.mallId !== currentMallId)) && session.mallName && (
+          <p className="text-xs font-semibold text-purple-600 mb-1 truncate">{session.mallName}</p>
+        )}
         <h3 className="text-lg font-bold text-gray-900 mb-2 line-clamp-2 group-hover:text-purple-600 transition-colors">
+          {!isMCN && currentMallId && session.mallId !== currentMallId && <span className="mr-1.5 inline-block rounded bg-blue-100 px-1.5 py-0.5 text-[10px] font-semibold text-blue-700">본사</span>}
           {session.title}
         </h3>
 

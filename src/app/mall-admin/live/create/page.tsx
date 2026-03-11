@@ -10,8 +10,10 @@ import { createLiveSession } from '@/lib/services/live-service';
 import { getMallById } from '@/lib/services/mall-service';
 import { getMallProducts } from '@/lib/services/product-service';
 import type { CreateLiveSessionInput, LiveStreamPlatform } from '@/types/live';
-import type { Product } from '@/types';
-import { ArrowLeftIcon } from '@heroicons/react/24/outline';
+import type { Product, Mall, SharedProduct } from '@/types';
+import { getSharedProductsWithData } from '@/lib/services/shared-product-service';
+import { formatKRW } from '@/lib/utils/format';
+import { ArrowLeftIcon, SignalIcon } from '@heroicons/react/24/outline';
 
 const platformOptions: { value: LiveStreamPlatform; label: string }[] = [
   { value: 'youtube', label: 'YouTube' },
@@ -31,6 +33,10 @@ export default function CreateLivePage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [mallName, setMallName] = useState('');
   const [mallSlug, setMallSlug] = useState('');
+  const [mall, setMall] = useState<Mall | null>(null);
+  const [productTab, setProductTab] = useState<'my' | 'hq'>('my');
+  const [hqProducts, setHqProducts] = useState<(SharedProduct & { product: Product | null })[]>([]);
+  const [hqProductsLoading, setHqProductsLoading] = useState(false);
 
   const [formData, setFormData] = useState({
     title: '',
@@ -57,10 +63,11 @@ export default function CreateLivePage() {
     const loadData = async () => {
       try {
         // Get mall info
-        const mall = await getMallById(mallId);
-        if (mall) {
-          setMallName(mall.name);
-          setMallSlug(mall.slug);
+        const mallData = await getMallById(mallId);
+        if (mallData) {
+          setMallName(mallData.name);
+          setMallSlug(mallData.slug);
+          setMall(mallData);
         }
 
         // Get products
@@ -76,6 +83,27 @@ export default function CreateLivePage() {
 
     loadData();
   }, [mallId, toast]);
+
+  // Load HQ broadcast products when mall has parentMallId (is a franchisee/celebrity)
+  useEffect(() => {
+    if (!mallId || !mall?.parentMallId) return;
+
+    const loadHqProducts = async () => {
+      try {
+        setHqProductsLoading(true);
+        const shared = await getSharedProductsWithData(mallId, 'headquarters');
+        // Filter to only broadcast-enabled products
+        setHqProducts(shared.filter((s) => s.product?.broadcastEnabled));
+      } catch (error) {
+        console.error('Failed to load HQ broadcast products:', error);
+        toast({ type: 'error', message: '본사 방송 상품을 불러오지 못했습니다.' });
+      } finally {
+        setHqProductsLoading(false);
+      }
+    };
+
+    loadHqProducts();
+  }, [mallId, mall, toast]);
 
   const toggleProduct = (productId: string) => {
     setFormData((prev) => ({
@@ -273,49 +301,144 @@ export default function CreateLivePage() {
               </span>
             </div>
 
-            {productsLoading ? (
-              <div className="space-y-3">
-                {Array.from({ length: 3 }).map((_, i) => (
-                  <div key={i} className="h-16 w-full animate-pulse rounded bg-gray-100" />
-                ))}
+            {/* Product source tabs (only show when mall has a parent) */}
+            {mall?.parentMallId && (
+              <div className="flex items-center gap-1 rounded-lg bg-gray-100 p-1">
+                <button
+                  type="button"
+                  onClick={() => setProductTab('my')}
+                  className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${productTab === 'my' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                >
+                  내 상품
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setProductTab('hq')}
+                  className={`flex-1 inline-flex items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${productTab === 'hq' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                >
+                  <SignalIcon className="h-4 w-4" />
+                  본사 상품
+                </button>
               </div>
-            ) : products.length === 0 ? (
-              <div className="py-8 text-center text-sm text-gray-400">
-                판매 중인 상품이 없습니다.
-              </div>
-            ) : (
-              <div className="space-y-2 max-h-80 overflow-y-auto">
-                {products.map((product) => (
-                  <label
-                    key={product.id}
-                    className="flex items-center gap-3 rounded-lg border border-gray-200 p-3 cursor-pointer hover:bg-gray-50 transition-colors"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={formData.selectedProductIds.includes(product.id)}
-                      onChange={() => toggleProduct(product.id)}
-                      className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary/20"
-                    />
-                    {product.thumbnailUrl ? (
-                      <img
-                        src={product.thumbnailUrl}
-                        alt={product.name}
-                        className="h-12 w-12 rounded-lg object-cover flex-shrink-0"
-                      />
-                    ) : (
-                      <div className="h-12 w-12 rounded-lg bg-gray-100 flex-shrink-0" />
-                    )}
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-gray-900 truncate">
-                        {product.name}
-                      </p>
-                      <p className="text-sm text-gray-500">
-                        {product.price.toLocaleString()}원
-                      </p>
-                    </div>
-                  </label>
-                ))}
-              </div>
+            )}
+
+            {/* My products tab */}
+            {(productTab === 'my' || !mall?.parentMallId) && (
+              <>
+                {productsLoading ? (
+                  <div className="space-y-3">
+                    {Array.from({ length: 3 }).map((_, i) => (
+                      <div key={i} className="h-16 w-full animate-pulse rounded bg-gray-100" />
+                    ))}
+                  </div>
+                ) : products.length === 0 ? (
+                  <div className="py-8 text-center text-sm text-gray-400">
+                    판매 중인 상품이 없습니다.
+                  </div>
+                ) : (
+                  <div className="space-y-2 max-h-80 overflow-y-auto">
+                    {products.map((product) => (
+                      <label
+                        key={product.id}
+                        className="flex items-center gap-3 rounded-lg border border-gray-200 p-3 cursor-pointer hover:bg-gray-50 transition-colors"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={formData.selectedProductIds.includes(product.id)}
+                          onChange={() => toggleProduct(product.id)}
+                          className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary/20"
+                        />
+                        {product.thumbnailUrl ? (
+                          <img
+                            src={product.thumbnailUrl}
+                            alt={product.name}
+                            className="h-12 w-12 rounded-lg object-cover flex-shrink-0"
+                          />
+                        ) : (
+                          <div className="h-12 w-12 rounded-lg bg-gray-100 flex-shrink-0" />
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-gray-900 truncate">
+                            {product.name}
+                          </p>
+                          <p className="text-sm text-gray-500">
+                            {product.price.toLocaleString()}원
+                          </p>
+                        </div>
+                      </label>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
+
+            {/* HQ broadcast products tab */}
+            {productTab === 'hq' && mall?.parentMallId && (
+              <>
+                {hqProductsLoading ? (
+                  <div className="space-y-3">
+                    {Array.from({ length: 3 }).map((_, i) => (
+                      <div key={i} className="h-16 w-full animate-pulse rounded bg-gray-100" />
+                    ))}
+                  </div>
+                ) : hqProducts.length === 0 ? (
+                  <div className="py-8 text-center text-sm text-gray-400">
+                    <SignalIcon className="mx-auto h-8 w-8 text-gray-300 mb-2" />
+                    방송가능한 본사 상품이 없습니다.
+                  </div>
+                ) : (
+                  <div className="space-y-2 max-h-80 overflow-y-auto">
+                    {hqProducts.map((shared) => {
+                      const p = shared.product;
+                      if (!p) return null;
+                      const displayPrice = p.broadcastSpecialPrice != null && p.broadcastSpecialPrice > 0
+                        ? p.broadcastSpecialPrice
+                        : p.salePrice ?? p.price;
+                      const hasSpecialPrice = p.broadcastSpecialPrice != null && p.broadcastSpecialPrice > 0;
+                      return (
+                        <label
+                          key={shared.sourceProductId}
+                          className="flex items-center gap-3 rounded-lg border border-purple-200 bg-purple-50/30 p-3 cursor-pointer hover:bg-purple-50 transition-colors"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={formData.selectedProductIds.includes(shared.sourceProductId)}
+                            onChange={() => toggleProduct(shared.sourceProductId)}
+                            className="h-4 w-4 rounded border-gray-300 text-purple-600 focus:ring-purple-200"
+                          />
+                          {p.thumbnailUrl ? (
+                            <img
+                              src={p.thumbnailUrl}
+                              alt={p.name}
+                              className="h-12 w-12 rounded-lg object-cover flex-shrink-0"
+                            />
+                          ) : (
+                            <div className="h-12 w-12 rounded-lg bg-gray-100 flex-shrink-0" />
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-gray-900 truncate">
+                              {p.name}
+                            </p>
+                            <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
+                              <span className={`text-sm ${hasSpecialPrice ? 'text-red-600 font-semibold' : 'text-gray-500'}`}>
+                                {formatKRW(displayPrice)}
+                              </span>
+                              {hasSpecialPrice && (
+                                <span className="text-xs text-gray-400 line-through">
+                                  {formatKRW(p.salePrice ?? p.price)}
+                                </span>
+                              )}
+                              <span className="inline-flex items-center rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700">
+                                수수료 {p.broadcastCommissionRate ?? 0}%
+                              </span>
+                            </div>
+                          </div>
+                        </label>
+                      );
+                    })}
+                  </div>
+                )}
+              </>
             )}
           </div>
         </Card>

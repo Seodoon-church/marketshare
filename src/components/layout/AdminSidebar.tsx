@@ -29,6 +29,7 @@ import {
   LinkIcon,
   VideoCameraIcon,
   PlayCircleIcon,
+  SignalIcon,
 } from '@heroicons/react/24/outline';
 
 interface SidebarItem {
@@ -118,7 +119,7 @@ const platformAdminGroups: SidebarGroup[] = [
 
 type MallType = 'headquarters' | 'franchisee' | 'independent';
 
-function getMallAdminGroups(mallType: MallType): SidebarGroup[] {
+function getMallAdminGroups(mallType: MallType, isMCN: boolean = false): SidebarGroup[] {
   const groups: SidebarGroup[] = [
     {
       title: '',
@@ -185,6 +186,17 @@ function getMallAdminGroups(mallType: MallType): SidebarGroup[] {
     ],
   });
 
+  // MCN 관리 (MCN 본사 전용)
+  if (isMCN) {
+    groups.push({
+      title: 'MCN 관리',
+      items: [
+        { label: 'MCN 대시보드', href: '/mall-admin/mcn', icon: VideoCameraIcon },
+        { label: '셀럽 방송 현황', href: '/mall-admin/mcn/streams', icon: SignalIcon },
+      ],
+    });
+  }
+
   // Settlement & Analytics - HQ gets extra "가맹점 정산"
   const settlementItems: SidebarItem[] = [
     { label: '정산 내역', href: '/mall-admin/settlements', icon: CurrencyDollarIcon },
@@ -218,6 +230,7 @@ export function AdminSidebar({ role }: AdminSidebarProps) {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [mallType, setMallType] = useState<MallType>('independent');
+  const [isMCN, setIsMCN] = useState(false);
   const user = useAuthStore((s) => s.user);
 
   useEffect(() => {
@@ -232,10 +245,11 @@ export function AdminSidebar({ role }: AdminSidebarProps) {
       } else {
         setMallType('independent');
       }
+      setIsMCN(!!mall.isMCN);
     }).catch(() => {});
   }, [role, user?.ownedMallIds]);
 
-  const groups = role === 'platform_admin' ? platformAdminGroups : getMallAdminGroups(mallType);
+  const groups = role === 'platform_admin' ? platformAdminGroups : getMallAdminGroups(mallType, isMCN);
   const title = role === 'platform_admin' ? '플랫폼 관리' : '몰 관리';
 
   const sidebar = (

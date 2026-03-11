@@ -174,27 +174,21 @@ export async function deleteLiveSession(sessionId: string): Promise<void> {
 }
 
 /**
- * Get live sessions for a mall
+ * Get live sessions for a mall (or multiple malls)
  */
 export async function getLiveSessions(
-  mallId: string,
+  mallId: string | string[],
   status?: LiveSessionStatus
 ): Promise<LiveSession[]> {
   const sessionsRef = collection(db, LIVE_SESSIONS_COLLECTION);
+  const mallFilter = Array.isArray(mallId)
+    ? where('mallId', 'in', mallId)
+    : where('mallId', '==', mallId);
 
-  let q = query(
-    sessionsRef,
-    where('mallId', '==', mallId),
-    orderBy('scheduledAt', 'desc')
-  );
+  let q = query(sessionsRef, mallFilter, orderBy('scheduledAt', 'desc'));
 
   if (status) {
-    q = query(
-      sessionsRef,
-      where('mallId', '==', mallId),
-      where('status', '==', status),
-      orderBy('scheduledAt', 'desc')
-    );
+    q = query(sessionsRef, mallFilter, where('status', '==', status), orderBy('scheduledAt', 'desc'));
   }
 
   const snapshot = await getDocs(q);
@@ -209,17 +203,15 @@ export async function getLiveSessions(
 }
 
 /**
- * Get active (currently live) session for a mall
+ * Get active (currently live) session for a mall (or multiple malls)
  */
-export async function getActiveLiveSession(mallId: string): Promise<LiveSession | null> {
+export async function getActiveLiveSession(mallId: string | string[]): Promise<LiveSession | null> {
   const sessionsRef = collection(db, LIVE_SESSIONS_COLLECTION);
+  const mallFilter = Array.isArray(mallId)
+    ? where('mallId', 'in', mallId)
+    : where('mallId', '==', mallId);
 
-  const q = query(
-    sessionsRef,
-    where('mallId', '==', mallId),
-    where('status', '==', 'live'),
-    limit(1)
-  );
+  const q = query(sessionsRef, mallFilter, where('status', '==', 'live'), limit(1));
 
   const snapshot = await getDocs(q);
 
@@ -330,4 +322,49 @@ export function subscribeToLiveSession(
   return onSnapshot(docRef, (snapshot: DocumentSnapshot<DocumentData>) => {
     callback(docToLiveSession(snapshot));
   });
+}
+
+/**
+ * MCN Hub: Get live sessions from multiple child malls (celebrities)
+ * Handles Firestore 'in' query limit of 30 by chunking
+ */
+export async function getChildMallLiveSessions(
+  childMallIds: string[],
+  status?: LiveSessionStatus
+): Promise<LiveSession[]> {
+  if (childMallIds.length === 0) return [];
+
+  const sessionsRef = collection(db, LIVE_SESSIONS_COLLECTION);
+  const allSessions: LiveSession[] = [];
+
+  // Firestore 'in' query supports max 30 values
+  const chunks: string[][] = [];
+  for (let i = 0; i < childMallIds.length; i += 30) {
+    chunks.push(childMallIds.slice(i, i + 30));
+  }
+
+  for (const chunk of chunks) {
+    const mallFilter = where('mallId', 'in', chunk);
+    const q = status
+      ? query(sessionsRef, mallFilter, where('status', '==', status), orderBy('scheduledAt', 'desc'))
+      : query(sessionsRef, mallFilter, orderBy('scheduledAt', 'desc'));
+
+    const snapshot = await getDocs(q);
+    snapshot.forEach((d) => {
+      const session = docToLiveSession(d);
+      if (session) allSessions.push(session);
+    });
+  }
+
+  // Sort by scheduledAt desc
+  return allSessions.sort((a, b) => b.scheduledAt.getTime() - a.scheduledAt.getTime());
+}
+
+/**
+ * MCN Hub: Get all currently active sessions from child malls
+ */
+export async function getActiveChildMallSessions(
+  childMallIds: string[]
+): Promise<LiveSession[]> {
+  return getChildMallLiveSessions(childMallIds, 'live');
 }

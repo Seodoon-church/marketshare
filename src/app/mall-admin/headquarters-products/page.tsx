@@ -14,6 +14,7 @@ import {
 import type { Mall, SharedProduct, Product } from '@/types';
 import {
   BuildingStorefrontIcon, EyeIcon, EyeSlashIcon, PhotoIcon, MagnifyingGlassIcon, FunnelIcon,
+  SignalIcon,
 } from '@heroicons/react/24/outline';
 
 type SharedProductWithData = SharedProduct & { product: Product | null };
@@ -38,6 +39,7 @@ export default function HeadquartersProductsPage() {
   const [products, setProducts] = useState<SharedProductWithData[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
+  const [broadcastFilter, setBroadcastFilter] = useState(false);
   const mallId = user?.ownedMallIds?.[0];
 
   useEffect(() => { if (!authLoading && !isMallOwner) window.location.href = '/'; }, [authLoading, isMallOwner]);
@@ -69,8 +71,11 @@ export default function HeadquartersProductsPage() {
     const name = s.product?.name ?? '(삭제된 상품)';
     if (searchQuery && !name.toLowerCase().includes(searchQuery.toLowerCase())) return false;
     if (categoryFilter && s.product?.categoryName !== categoryFilter) return false;
+    if (broadcastFilter && !s.product?.broadcastEnabled) return false;
     return true;
-  }), [products, searchQuery, categoryFilter]);
+  }), [products, searchQuery, categoryFilter, broadcastFilter]);
+
+  const broadcastEnabledCount = products.filter((s) => s.product?.broadcastEnabled).length;
 
   const visibleCount = products.filter((p) => !p.isHidden).length;
   const hiddenCount = products.filter((p) => p.isHidden).length;
@@ -150,6 +155,10 @@ export default function HeadquartersProductsPage() {
               className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium transition-colors bg-gray-100 text-gray-600 hover:bg-gray-200 ${bulkAction ? 'opacity-50 cursor-not-allowed' : ''}`}>
               <EyeSlashIcon className="h-3.5 w-3.5" />전체 숨기기
             </button>
+            <button onClick={() => setBroadcastFilter((v) => !v)}
+              className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium transition-colors ${broadcastFilter ? 'bg-purple-100 text-purple-700 ring-1 ring-purple-300' : 'bg-purple-50 text-purple-600 hover:bg-purple-100'}`}>
+              <SignalIcon className="h-3.5 w-3.5" />방송가능 ({broadcastEnabledCount})
+            </button>
           </div>
           <div className="flex items-center gap-2">
             <div className="relative">
@@ -210,9 +219,21 @@ export default function HeadquartersProductsPage() {
                         {p?.name || '(삭제된 상품)'}
                         {deleted && <span className="ml-1.5 text-xs text-red-400 font-normal">(삭제됨)</span>}
                       </p>
-                      <div className="mt-0.5 flex items-center gap-2">
+                      <div className="mt-0.5 flex flex-wrap items-center gap-2">
                         {p && <span className="text-xs text-gray-500">{formatKRW(p.salePrice ?? p.price)}</span>}
                         {p?.categoryName && <Badge variant="default">{p.categoryName}</Badge>}
+                        {p?.broadcastEnabled && (
+                          <>
+                            <span className="inline-flex items-center gap-0.5 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
+                              판매수수료: {p.broadcastCommissionRate ?? 0}%
+                            </span>
+                            {p.broadcastSpecialPrice != null && p.broadcastSpecialPrice > 0 && (
+                              <span className="inline-flex items-center rounded-full bg-red-50 px-2 py-0.5 text-[10px] font-semibold text-red-600">
+                                방송특가: {formatKRW(p.broadcastSpecialPrice)}
+                              </span>
+                            )}
+                          </>
+                        )}
                       </div>
                     </div>
                   </div>

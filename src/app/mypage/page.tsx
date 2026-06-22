@@ -1,364 +1,132 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { Button } from '@/components/ui/Button';
-import { Card, CardTitle } from '@/components/ui/Card';
-import { Badge, OrderStatusBadge } from '@/components/ui/Badge';
-import { SkeletonCard } from '@/components/ui/Skeleton';
-import { EmptyState } from '@/components/ui/EmptyState';
-import { useToast } from '@/components/ui/Toast';
-import { Modal } from '@/components/ui/Modal';
-import { formatKRW, formatDate } from '@/lib/utils/format';
-import { useAuth } from '@/lib/hooks/useAuth';
-import { useUserOrders } from '@/lib/hooks/useOrders';
-import { cancelOrder, requestRefund } from '@/lib/services/order-service';
-import type { Order } from '@/types';
-import {
-  TruckIcon,
-  ArrowPathIcon,
-  PencilSquareIcon,
-  CreditCardIcon,
-  CubeIcon,
-  CheckCircleIcon,
-  ShoppingBagIcon,
-} from '@heroicons/react/24/outline';
+import { EdHeading } from '@/components/redesign/EdHeading';
+import { EdLabel } from '@/components/redesign/EdLabel';
+import { EdButton } from '@/components/redesign/EdButton';
+import { EdBottomTabBar } from '@/components/redesign/EdBottomTabBar';
 
-const periodFilters = ['1주일', '1개월', '3개월', '6개월', '1년'];
-
-// Gradient fallbacks for product images
-const gradients = [
-  'from-violet-400 to-indigo-500',
-  'from-rose-400 to-pink-500',
-  'from-emerald-400 to-teal-500',
-  'from-amber-400 to-orange-500',
-  'from-blue-400 to-cyan-500',
-  'from-fuchsia-400 to-purple-500',
+const orders = [
+  { id: '1', name: 'DP5 세럼 50ml', no: 'ORD-240620-001', t: '06.20 14:23', amt: '₩18,900', st: '배송중', stColor: 'text-jade', img: '/images/redesign/dp5.png' },
+  { id: '2', name: '멀티비타민 60정', no: 'ORD-240618-042', t: '06.18 09:11', amt: '₩49,000', st: '배송완료', stColor: 'text-[#8A7C68]', img: '/images/redesign/dp1.png' },
+  { id: '3', name: '약산성 샴푸 500ml', no: 'ORD-240615-019', t: '06.15 18:45', amt: '₩16,900', st: '주문확인', stColor: 'text-brass', img: '/images/redesign/dp9.png' },
 ];
 
-export default function OrderHistoryPage() {
-  const { user, isLoading: authLoading, isAuthenticated } = useAuth();
-  const { orders, isLoading: ordersLoading, error } = useUserOrders(user?.id);
-  const [activePeriod, setActivePeriod] = useState('3개월');
-  const { toast } = useToast();
-  const [cancelModal, setCancelModal] = useState<{ orderId: string; mallId: string; type: 'cancel' | 'refund' } | null>(null);
-  const [cancelReason, setCancelReason] = useState('');
-  const [isCancelling, setIsCancelling] = useState(false);
+const bars = [
+  { day: '월', h: '30%', bg: '#E7DCC9' },
+  { day: '화', h: '50%', bg: '#E7DCC9' },
+  { day: '수', h: '40%', bg: '#E7DCC9' },
+  { day: '목', h: '65%', bg: '#E7DCC9' },
+  { day: '금', h: '90%', bg: '#9C7C46' },
+  { day: '토', h: '75%', bg: '#1A1815' },
+  { day: '일', h: '45%', bg: '#E7DCC9' },
+];
 
-  const handleTrackDelivery = (order: Order) => {
-    if (order.trackingNumber && order.trackingCompany) {
-      const trackingUrls: Record<string, string> = {
-        'CJ대한통운': `https://www.cjlogistics.com/ko/tool/parcel/tracking?gnbInvcNo=${order.trackingNumber}`,
-        '한진택배': `https://www.hanjin.com/kor/CMS/DeliveryMgr/WaybillResult.do?mession_flag=4&wblnumText2=${order.trackingNumber}`,
-        '롯데택배': `https://www.lotteglogis.com/home/reservation/tracking/index?InvNo=${order.trackingNumber}`,
-        '우체국택배': `https://service.epost.go.kr/trace.RetrieveDomRi498.postal?sid1=${order.trackingNumber}`,
-      };
-      const url = trackingUrls[order.trackingCompany] || `https://search.naver.com/search.naver?query=${order.trackingCompany}+${order.trackingNumber}`;
-      window.open(url, '_blank');
-    } else {
-      toast({ type: 'info', message: '아직 송장번호가 등록되지 않았습니다.' });
-    }
-  };
-
-  const handleCancelRefund = (orderId: string, mallId: string, orderStatus: string) => {
-    const type = ['pending', 'paid'].includes(orderStatus) ? 'cancel' : 'refund';
-    setCancelModal({ orderId, mallId, type });
-    setCancelReason('');
-  };
-
-  const handleConfirmCancel = async () => {
-    if (!cancelModal || !cancelReason.trim()) {
-      toast({ type: 'warning', message: '사유를 입력해주세요.' });
-      return;
-    }
-    setIsCancelling(true);
-    try {
-      if (cancelModal.type === 'cancel') {
-        await cancelOrder(cancelModal.orderId, cancelModal.mallId, cancelReason);
-        toast({ type: 'success', message: '주문이 취소되었습니다.' });
-      } else {
-        await requestRefund(cancelModal.orderId, cancelModal.mallId, cancelReason);
-        toast({ type: 'success', message: '환불이 요청되었습니다.' });
-      }
-      setCancelModal(null);
-      window.location.reload();
-    } catch (error: any) {
-      toast({ type: 'error', message: error.message || '처리 중 오류가 발생했습니다.' });
-    } finally {
-      setIsCancelling(false);
-    }
-  };
-
-  // Auth redirect
-  useEffect(() => {
-    if (!authLoading && !isAuthenticated) {
-      window.location.href = '/auth/login?redirect=/mypage';
-    }
-  }, [authLoading, isAuthenticated]);
-
-  // Calculate order status summary from real orders
-  const orderStatusSummary = [
-    {
-      label: '결제완료',
-      count: orders.filter((o) => o.status === 'paid').length,
-      icon: CreditCardIcon,
-      color: 'text-blue-600 bg-blue-50',
-    },
-    {
-      label: '배송준비',
-      count: orders.filter((o) => o.status === 'preparing').length,
-      icon: CubeIcon,
-      color: 'text-amber-600 bg-amber-50',
-    },
-    {
-      label: '배송중',
-      count: orders.filter((o) => o.status === 'shipped').length,
-      icon: TruckIcon,
-      color: 'text-primary bg-primary/10',
-    },
-    {
-      label: '배송완료',
-      count: orders.filter((o) => o.status === 'delivered').length,
-      icon: CheckCircleIcon,
-      color: 'text-emerald-600 bg-emerald-50',
-    },
-  ];
-
-  // Show loading state during auth check
-  if (authLoading) {
-    return (
-      <div className="space-y-6">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">주문내역</h1>
-          <p className="mt-1 text-sm text-gray-500">주문하신 상품의 배송 현황을 확인하세요.</p>
-        </div>
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          {[...Array(4)].map((_, i) => (
-            <SkeletonCard key={i} />
-          ))}
-        </div>
-        <SkeletonCard />
-        <div className="space-y-4">
-          {[...Array(3)].map((_, i) => (
-            <SkeletonCard key={i} />
-          ))}
-        </div>
-      </div>
-    );
-  }
-
-  // Don't render if not authenticated (will redirect)
-  if (!isAuthenticated) {
-    return null;
-  }
-
+export default function MyPage() {
   return (
-    <div className="space-y-6">
-      {/* Page Title */}
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">주문내역</h1>
-        <p className="mt-1 text-sm text-gray-500">주문하신 상품의 배송 현황을 확인하세요.</p>
+    <div className="min-h-screen bg-paper pb-24">
+      {/* Owner header */}
+      <div className="bg-ink px-[18px] pt-[50px] md:pt-6 pb-[22px]">
+        <div className="md:max-w-[1280px] md:mx-auto">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-[11px]">
+              <div className="w-[42px] h-[42px] bg-brass flex items-center justify-center font-serif text-[21px] font-bold text-white">데</div>
+              <div>
+                <div className="flex items-center gap-[7px]">
+                  <span className="font-serif text-[17px] font-bold text-paper">데이지 뷰티</span>
+                  <span className="font-mono text-[9.5px] font-semibold text-ink bg-brass py-[2px] px-1.5">A-204</span>
+                </div>
+                <div className="font-mono text-[10.5px] text-[#A89B86] mt-1 tracking-[.04em]">관리자 · 비즈니스 플랜</div>
+              </div>
+            </div>
+            <EdButton variant="ghost" size="sm" href="/malls/daisy-beauty" className="text-cream border-[#4A4239] text-[11px]">점포 보기</EdButton>
+          </div>
+
+          {/* Today settlement */}
+          <a href="/mypage/settlement" className="block mt-[18px] border border-[#3A3024] p-[17px]">
+            <div className="flex items-center justify-between border-b border-[#3A3024] pb-[11px]">
+              <span className="font-mono text-[11px] text-[#A89B86] tracking-[.04em]">오늘 매출 · 06.20</span>
+              <span className="font-mono text-[11px] text-[#7FB99C]">▲ 18.4%</span>
+            </div>
+            <div className="font-mono text-[30px] font-semibold text-paper mt-[13px] tracking-tight">₩1,284,600</div>
+            <div className="text-[11.5px] text-[#8A7C68] mt-[5px]">정산 예정 <span className="font-mono text-[#A89B86]">₩2,418,500</span> · 06.25 입금</div>
+          </a>
+        </div>
       </div>
 
-      {/* Order Status Summary */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        {orderStatusSummary.map((status) => (
-          <Card key={status.label} className="flex items-center gap-3 cursor-pointer" hover>
-            <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${status.color}`}>
-              <status.icon className="h-5 w-5" />
+      {/* KPI cards */}
+      <div className="grid grid-cols-2 gap-0 mx-[18px] md:mx-auto md:max-w-[1280px] mt-[18px] border-[1.5px] border-ink">
+        <div className="p-[15px_16px] border-r border-[#E3DACA]">
+          <div className="font-mono text-[10.5px] text-brass tracking-[.04em]">오늘 주문</div>
+          <div className="font-mono text-[24px] font-semibold text-ink mt-[5px]">37<span className="text-[12px] text-[#A89B86]">건</span></div>
+          <div className="text-[10.5px] text-jade font-semibold mt-[3px]">신규 12 · 배송 8</div>
+        </div>
+        <div className="p-[15px_16px]">
+          <div className="font-mono text-[10.5px] text-brass tracking-[.04em]">방문자</div>
+          <div className="font-mono text-[24px] font-semibold text-ink mt-[5px]">2,140<span className="text-[12px] text-[#A89B86]">명</span></div>
+          <div className="text-[10.5px] text-jade font-semibold mt-[3px]">전환율 1.7%</div>
+        </div>
+      </div>
+
+      {/* Weekly chart */}
+      <div className="mx-[18px] md:mx-auto md:max-w-[1280px] mt-[14px] border border-[#E3DACA] p-[18px]">
+        <div className="flex items-center justify-between">
+          <span className="font-serif text-[16px] font-bold text-ink">주간 매출</span>
+          <div className="flex border border-ink">
+            <span className="font-mono text-[10.5px] font-medium text-paper bg-ink py-1 px-[10px]">주</span>
+            <span className="font-mono text-[10.5px] font-medium text-[#8A7C68] py-1 px-[10px]">월</span>
+          </div>
+        </div>
+        <div className="flex items-end gap-[9px] h-[118px] mt-[18px]">
+          {bars.map((b) => (
+            <div key={b.day} className="flex-1 flex flex-col items-center gap-2 h-full justify-end">
+              <div className="w-full" style={{ height: b.h, background: b.bg }} />
+              <span className={`font-mono text-[10px] ${b.bg === '#1A1815' ? 'text-ink font-bold' : 'text-[#8A7C68]'}`}>{b.day}</span>
             </div>
-            <div>
-              <p className="text-xs text-gray-500">{status.label}</p>
-              <p className="text-xl font-bold text-gray-900">{status.count}</p>
-            </div>
-          </Card>
+          ))}
+        </div>
+      </div>
+
+      {/* Quick actions */}
+      <div className="grid grid-cols-4 gap-0 mx-[18px] md:mx-auto md:max-w-[1280px] mt-[14px] border border-[#E3DACA]">
+        {[
+          { label: '상품등록', href: '/mall-admin/products', icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#1A1815" strokeWidth="1.6"><rect x="4" y="7" width="16" height="13" /><path d="M4 7l2-3h12l2 3M9 11h6" /></svg> },
+          { label: '라이브', href: '/live', icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#C53A22" strokeWidth="1.6"><circle cx="12" cy="12" r="2.2" /><path d="M8.4 8.4a5 5 0 0 0 0 7.2" /><path d="M15.6 8.4a5 5 0 0 1 0 7.2" /></svg> },
+          { label: '쿠폰', href: '/mall-admin/coupons', icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#1A1815" strokeWidth="1.6"><path d="M4 6h16v4a2 2 0 0 0 0 4v4H4v-4a2 2 0 0 0 0-4z" /><path d="M13 6v14" strokeDasharray="2 2" /></svg> },
+          { label: '정산', href: '/mypage/settlement', icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#1A1815" strokeWidth="1.6"><circle cx="12" cy="12" r="8" /><path d="M12 8v8M9.5 10a2.5 2 0 0 1 5 0c0 1.3-1 1.6-2.5 2s-2.5.7-2.5 2a2.5 2 0 0 0 5 0" /></svg> },
+        ].map((action) => (
+          <a key={action.label} href={action.href} className="p-[15px_6px] text-center border-r border-[#E3DACA] last:border-r-0">
+            <div className="flex justify-center">{action.icon}</div>
+            <div className="text-[11px] font-semibold text-[#3A3024] mt-2">{action.label}</div>
+          </a>
         ))}
       </div>
 
-      {/* Period Filter - Visual only (service doesn't support date filtering yet) */}
-      <Card padding="sm">
-        <div className="flex flex-wrap gap-2">
-          {periodFilters.map((period) => (
-            <button
-              key={period}
-              onClick={() => setActivePeriod(period)}
-              className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
-                activePeriod === period
-                  ? 'bg-primary text-white shadow-sm'
-                  : 'text-gray-600 hover:bg-gray-100'
-              }`}
-            >
-              {period}
-            </button>
-          ))}
+      {/* Recent orders */}
+      <div className="px-[18px] md:px-10 md:max-w-[1280px] md:mx-auto pt-[26px]">
+        <div className="flex items-baseline justify-between">
+          <EdHeading level={3} className="text-[18px]">최근 주문</EdHeading>
+          <span className="font-mono text-[11px] text-[#8A7C68]">전체 →</span>
         </div>
-      </Card>
-
-      {/* Loading State */}
-      {ordersLoading && (
-        <div className="space-y-4">
-          {[...Array(3)].map((_, i) => (
-            <SkeletonCard key={i} />
-          ))}
-        </div>
-      )}
-
-      {/* Error State */}
-      {error && (
-        <Card>
-          <EmptyState
-            icon={<ShoppingBagIcon className="h-12 w-12" />}
-            title="주문 내역을 불러올 수 없습니다"
-            description="잠시 후 다시 시도해주세요."
-          />
-        </Card>
-      )}
-
-      {/* Empty State */}
-      {!ordersLoading && !error && orders.length === 0 && (
-        <Card>
-          <EmptyState
-            icon={<ShoppingBagIcon className="h-12 w-12" />}
-            title="주문 내역이 없습니다"
-            description="아직 주문하신 상품이 없습니다."
-            action={{
-              label: '쇼핑하러 가기',
-              href: '/',
-            }}
-          />
-        </Card>
-      )}
-
-      {/* Order List */}
-      {!ordersLoading && !error && orders.length > 0 && (
-        <div className="space-y-4">
-          {orders.map((order, orderIdx) => (
-            <Card key={order.id} padding="none">
-              {/* Order Header */}
-              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-50 px-5 py-3">
-                <div className="flex items-center gap-3">
-                  <span className="text-sm font-semibold text-gray-900">
-                    {order.orderNumber || order.id}
-                  </span>
-                  <span className="text-xs text-gray-400">
-                    {formatDate(order.createdAt)}
-                  </span>
-                </div>
-                <OrderStatusBadge status={order.status} />
+        <div className="mt-[13px] border-t-[1.5px] border-ink">
+          {orders.map((o) => (
+            <div key={o.id} className="flex items-center gap-[13px] py-[13px] border-b border-[#E3DACA]">
+              <div className="w-[44px] h-[44px] bg-cream overflow-hidden flex-none">
+                <img src={o.img} alt={o.name} className="w-full h-full object-cover" />
               </div>
-
-              {/* Order Items */}
-              {order.items.map((item, idx) => {
-                const gradient = gradients[idx % gradients.length];
-                const optionsText = item.options
-                  ? Object.entries(item.options)
-                      .map(([key, value]) => `${key}: ${value}`)
-                      .join(' / ')
-                  : '';
-                const displayPrice = item.price;
-
-                return (
-                  <div key={idx} className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center">
-                    {/* Product Thumbnail */}
-                    {item.imageUrl ? (
-                      <img
-                        src={item.imageUrl}
-                        alt={item.name}
-                        className="h-20 w-20 shrink-0 rounded-xl object-cover shadow-sm"
-                      />
-                    ) : (
-                      <div
-                        className={`h-20 w-20 shrink-0 rounded-xl bg-gradient-to-br ${gradient} shadow-sm`}
-                      />
-                    )}
-
-                    {/* Product Info */}
-                    <div className="min-w-0 flex-1">
-                      <a
-                        href={`/products/${item.productId}`}
-                        className="truncate text-sm font-medium text-gray-900 hover:text-primary"
-                      >
-                        {item.name}
-                      </a>
-                      {optionsText && (
-                        <p className="mt-0.5 text-xs text-gray-500">{optionsText}</p>
-                      )}
-                      <div className="mt-2 flex items-center gap-2">
-                        <span className="text-sm font-bold text-gray-900">
-                          {formatKRW(displayPrice)}
-                        </span>
-                        <span className="text-xs text-gray-400">/ {item.quantity}개</span>
-                      </div>
-                    </div>
-
-                    {/* Action Buttons */}
-                    <div className="flex shrink-0 flex-wrap gap-2 sm:flex-col">
-                      <Button variant="outline" size="sm" onClick={() => handleTrackDelivery(order)}>
-                        <TruckIcon className="h-3.5 w-3.5" />
-                        배송조회
-                      </Button>
-                      {order.status !== 'cancelled' && order.status !== 'refunded' && (
-                        <Button variant="outline" size="sm" onClick={() => handleCancelRefund(order.id, order.mallId, order.status)}>
-                          <ArrowPathIcon className="h-3.5 w-3.5" />
-                          교환/반품
-                        </Button>
-                      )}
-                      {order.status === 'delivered' && (
-                        <Button variant="outline" size="sm" onClick={() => { window.location.href = `/mypage/reviews?write=true&productId=${item.productId}&orderId=${order.id}`; }}>
-                          <PencilSquareIcon className="h-3.5 w-3.5" />
-                          리뷰작성
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-
-              {/* Order Total (if multiple items) */}
-              {order.items.length > 1 && (
-                <div className="border-t border-gray-50 px-5 py-3">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-gray-600">총 주문금액</span>
-                    <span className="text-lg font-bold text-gray-900">
-                      {formatKRW(order.totalAmount)}
-                    </span>
-                  </div>
-                </div>
-              )}
-            </Card>
+              <div className="flex-1 min-w-0">
+                <div className="text-[13px] font-semibold text-ink truncate">{o.name}</div>
+                <div className="font-mono text-[10px] text-[#A89B86] mt-[3px]">{o.no} · {o.t}</div>
+              </div>
+              <div className="text-right flex-none">
+                <div className="font-mono text-[13.5px] font-semibold text-ink">{o.amt}</div>
+                <span className={`inline-block mt-1 font-mono text-[9.5px] font-semibold ${o.stColor} border border-current py-[1px] px-1.5`}>{o.st}</span>
+              </div>
+            </div>
           ))}
         </div>
-      )}
+      </div>
 
-      {/* Cancel/Refund Modal */}
-      {cancelModal && (
-        <Modal
-          isOpen={!!cancelModal}
-          onClose={() => setCancelModal(null)}
-          title={cancelModal.type === 'cancel' ? '주문 취소' : '환불 요청'}
-        >
-          <div className="space-y-4">
-            <p className="text-sm text-gray-600">
-              {cancelModal.type === 'cancel' ? '주문을 취소하시겠습니까?' : '환불을 요청하시겠습니까?'}
-            </p>
-            <div>
-              <label className="mb-1.5 block text-sm font-medium text-gray-700">사유</label>
-              <textarea
-                value={cancelReason}
-                onChange={(e) => setCancelReason(e.target.value)}
-                placeholder="취소/환불 사유를 입력해주세요"
-                rows={3}
-                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm placeholder:text-gray-400 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
-              />
-            </div>
-            <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setCancelModal(null)}>취소</Button>
-              <Button variant="danger" onClick={handleConfirmCancel} isLoading={isCancelling}>
-                {cancelModal.type === 'cancel' ? '주문 취소' : '환불 요청'}
-              </Button>
-            </div>
-          </div>
-        </Modal>
-      )}
+      <EdBottomTabBar activeTab="mine" />
     </div>
   );
 }

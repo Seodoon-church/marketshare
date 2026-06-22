@@ -1,914 +1,160 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import { useState } from 'react';
+import { EdHeader } from '@/components/redesign/EdHeader';
+import { EdFooter } from '@/components/redesign/EdFooter';
+import { EdBottomTabBar } from '@/components/redesign/EdBottomTabBar';
+import { EdHeading } from '@/components/redesign/EdHeading';
+import { EdButton } from '@/components/redesign/EdButton';
+import { IconChevronLeft, IconHeart, IconCart, IconStar, IconMinus, IconPlus } from '@/components/redesign/icons';
 
-import { Header } from '@/components/layout/Header';
-import { Footer } from '@/components/layout/Footer';
-import { Button } from '@/components/ui/Button';
-import { Badge } from '@/components/ui/Badge';
-import { ProductCard } from '@/components/product/ProductCard';
-import { Skeleton } from '@/components/ui/Skeleton';
-import { EmptyState } from '@/components/ui/EmptyState';
-import { useToast } from '@/components/ui/Toast';
-import { formatKRW, calcDiscountRate } from '@/lib/utils/format';
-import { useCartStore } from '@/store/cart-store';
-import { useAuth } from '@/lib/hooks/useAuth';
-import { useProduct, useProducts } from '@/lib/hooks/useProducts';
-import { useWishlist } from '@/lib/hooks/useWishlist';
-import { getProductReviews, getPosts } from '@/lib/services/board-service';
-import type { BoardPost } from '@/types';
-import {
-  StarIcon,
-  HeartIcon,
-  ShareIcon,
-  TruckIcon,
-  ShieldCheckIcon,
-  ArrowPathIcon,
-  MinusIcon,
-  PlusIcon,
-  ChevronRightIcon,
-  HomeIcon,
-  ChatBubbleLeftEllipsisIcon,
-  CheckCircleIcon,
-  ExclamationTriangleIcon,
-} from '@heroicons/react/24/outline';
-import { StarIcon as StarSolidIcon } from '@heroicons/react/24/solid';
+const product = {
+  id: 'dp5',
+  name: '히알루론산 수분 세럼 50ml',
+  mall: '데이지 뷰티',
+  unit: 'A-204',
+  off: '-38%',
+  price: 18900,
+  originalPrice: 49900,
+  rating: '4.9',
+  reviews: '247',
+  sales: '1,892',
+  img: '/images/redesign/dp5.png',
+};
 
-// 이미지 플레이스홀더 그라데이션 (실 이미지가 없는 경우)
-const placeholderGradients = [
-  'from-rose-200 to-pink-300',
-  'from-blue-200 to-indigo-300',
-  'from-emerald-200 to-teal-300',
-  'from-amber-200 to-orange-300',
-  'from-violet-200 to-purple-300',
+const related = [
+  { id: 'dp6', name: '수분크림 80ml', price: '32,000', img: '/images/redesign/dp6.png' },
+  { id: 'dp1', name: '멀티비타민 60정', price: '24,500', img: '/images/redesign/dp1.png' },
+  { id: 'dp9', name: '약산성 샴푸 500ml', price: '16,900', img: '/images/redesign/dp9.png' },
 ];
 
-function RatingStars({ rating, size = 'sm' }: { rating: number; size?: 'sm' | 'md' | 'lg' }) {
-  const sizeClass = size === 'lg' ? 'h-5 w-5' : size === 'md' ? 'h-4 w-4' : 'h-3.5 w-3.5';
-  return (
-    <div className="flex items-center gap-0.5">
-      {Array.from({ length: 5 }, (_, i) => {
-        if (i < Math.floor(rating)) {
-          return <StarSolidIcon key={i} className={`${sizeClass} text-amber-400`} />;
-        }
-        if (i < Math.ceil(rating) && rating % 1 >= 0.5) {
-          return (
-            <div key={i} className="relative">
-              <StarIcon className={`${sizeClass} text-gray-200`} />
-              <div className="absolute inset-0 overflow-hidden" style={{ width: '50%' }}>
-                <StarSolidIcon className={`${sizeClass} text-amber-400`} />
-              </div>
-            </div>
-          );
-        }
-        return <StarIcon key={i} className={`${sizeClass} text-gray-200`} />;
-      })}
-    </div>
-  );
+interface Props {
+  productId: string;
 }
 
-function ProductDetailSkeleton() {
-  return (
-    <>
-      <Header />
-      <main className="min-h-screen bg-gray-50/30">
-        {/* 브레드크럼 스켈레톤 */}
-        <div className="bg-white border-b border-gray-100">
-          <div className="mx-auto max-w-[var(--content-max-width)] px-4 py-3">
-            <Skeleton className="h-4 w-64" />
-          </div>
-        </div>
-
-        {/* 상품 상세 스켈레톤 */}
-        <div className="mx-auto max-w-[var(--content-max-width)] px-4 py-8">
-          <div className="grid grid-cols-1 gap-8 lg:grid-cols-2 lg:gap-12">
-            {/* 이미지 갤러리 스켈레톤 */}
-            <div className="flex gap-3">
-              <div className="hidden flex-col gap-2 sm:flex">
-                {Array.from({ length: 5 }).map((_, i) => (
-                  <Skeleton key={i} className="h-16 w-16 rounded-xl" />
-                ))}
-              </div>
-              <div className="flex-1">
-                <Skeleton className="aspect-square w-full rounded-2xl" />
-              </div>
-            </div>
-
-            {/* 상품 정보 스켈레톤 */}
-            <div className="flex flex-col space-y-4">
-              <Skeleton className="h-4 w-24" />
-              <Skeleton className="h-8 w-full" />
-              <Skeleton className="h-6 w-48" />
-              <Skeleton className="h-24 w-full rounded-2xl" />
-              <Skeleton className="h-6 w-full" />
-              <Skeleton className="h-12 w-full rounded-xl" />
-              <Skeleton className="h-12 w-full rounded-xl" />
-              <Skeleton className="h-12 w-full rounded-xl" />
-              <div className="flex gap-2">
-                <Skeleton className="h-12 w-12 rounded-xl" />
-                <Skeleton className="h-12 flex-1 rounded-xl" />
-                <Skeleton className="h-12 flex-1 rounded-xl" />
-              </div>
-            </div>
-          </div>
-        </div>
-      </main>
-      <Footer />
-    </>
-  );
-}
-
-export default function ProductDetailClient({ productId }: { productId: string }) {
-  const { toast } = useToast();
-  const { user } = useAuth();
-  const { product, isLoading, error } = useProduct(productId);
-  const { items: wishlistItems, addToWishlist, removeFromWishlist, isInWishlist } = useWishlist(user?.id);
-  const addItem = useCartStore((s) => s.addItem);
-
-  const [selectedImageIndex, setSelectedImageIndex] = useState(0);
-  const [selectedOptions, setSelectedOptions] = useState<Record<string, string>>({});
-  const [quantity, setQuantity] = useState(1);
-  const [activeTab, setActiveTab] = useState('description');
-  const [reviews, setReviews] = useState<BoardPost[]>([]);
-  const [inquiries, setInquiries] = useState<BoardPost[]>([]);
-  const [reviewsLoading, setReviewsLoading] = useState(false);
-  const [inquiriesLoading, setInquiriesLoading] = useState(false);
-
-  // Fetch related products only when product is loaded
-  const { products: relatedProductsList, isLoading: relatedLoading } = useProducts(
-    product ? { categoryId: product.categoryId, limit: 5 } : undefined
-  );
-
-  // Filter out current product from related products
-  const relatedProducts = relatedProductsList?.filter((p) => p.id !== productId).slice(0, 4) || [];
-
-  // Fetch reviews when product is loaded
-  useEffect(() => {
-    if (!product?.mallId) return;
-    let cancelled = false;
-    setReviewsLoading(true);
-    getProductReviews(product.mallId, productId, 10)
-      .then((data) => { if (!cancelled) setReviews(data); })
-      .catch(() => {})
-      .finally(() => { if (!cancelled) setReviewsLoading(false); });
-    return () => { cancelled = true; };
-  }, [product?.mallId, productId]);
-
-  // Fetch inquiries (QnA posts) when product is loaded
-  useEffect(() => {
-    if (!product?.mallId) return;
-    let cancelled = false;
-    setInquiriesLoading(true);
-    getPosts(product.mallId, 'qna', { limit: 10 })
-      .then(({ posts }) => {
-        if (!cancelled) {
-          // Filter inquiries for this product
-          const filtered = posts.filter((p) => p.productId === productId);
-          setInquiries(filtered);
-        }
-      })
-      .catch(() => {})
-      .finally(() => { if (!cancelled) setInquiriesLoading(false); });
-    return () => { cancelled = true; };
-  }, [product?.mallId, productId]);
-
-  // Build product images list
-  const productImages = product?.images?.length
-    ? product.images.sort((a, b) => a.order - b.order)
-    : null;
-
-  // Loading state
-  if (isLoading) {
-    return <ProductDetailSkeleton />;
-  }
-
-  // Error or not found state
-  if (error || !product) {
-    return (
-      <>
-        <Header />
-        <main className="min-h-screen bg-gray-50/30 flex items-center justify-center p-4">
-          <EmptyState
-            icon={<ExclamationTriangleIcon className="h-16 w-16 text-gray-400" />}
-            title="상품을 찾을 수 없습니다"
-            description="요청하신 상품이 존재하지 않거나 삭제되었습니다."
-            action={{
-              label: '전체 상품 보기',
-              href: '/products',
-            }}
-          />
-        </main>
-        <Footer />
-      </>
-    );
-  }
-
-  const hasDiscount = product.salePrice !== null && product.salePrice < product.price;
-  const displayPrice = product.salePrice ?? product.price;
-  const discountRate = hasDiscount ? calcDiscountRate(product.price, product.salePrice!) : 0;
-  const isSoldOut = product.status === 'soldout';
-  const freeShipping = product.shippingInfo?.fee === 0;
-  const isWished = isInWishlist(productId);
-
-  const handleWishlistToggle = async () => {
-    if (!user) {
-      toast({
-        type: 'error',
-        message: '로그인이 필요합니다.',
-      });
-      return;
-    }
-
-    try {
-      if (isWished) {
-        await removeFromWishlist(productId);
-        toast({
-          type: 'success',
-          message: '위시리스트에서 제거되었습니다.',
-        });
-      } else {
-        await addToWishlist(productId);
-        toast({
-          type: 'success',
-          message: '위시리스트에 추가되었습니다.',
-        });
-      }
-    } catch (error) {
-      toast({
-        type: 'error',
-        message: '오류가 발생했습니다. 다시 시도해주세요.',
-      });
-    }
-  };
-
-  const handleAddToCart = () => {
-    if (isSoldOut) return;
-    addItem({
-      productId: product.id,
-      mallId: product.mallId,
-      mallName: product.mallName,
-      name: product.name,
-      price: product.price,
-      salePrice: product.salePrice,
-      quantity,
-      options: selectedOptions,
-      imageUrl: product.thumbnailUrl || '',
-      stock: product.stock,
-    });
-    toast({
-      type: 'success',
-      message: '장바구니에 추가되었습니다.',
-    });
-  };
-
-  const handleBuyNow = () => {
-    if (isSoldOut) return;
-    handleAddToCart();
-  };
-
-  const totalPrice = displayPrice * quantity;
+export default function ClientPage({ productId }: Props) {
+  const [qty, setQty] = useState(1);
+  const total = product.price * qty;
+  const totalFormatted = total.toLocaleString('ko-KR');
 
   return (
-    <>
-      <Header />
-      <main className="min-h-screen bg-gray-50/30">
-        {/* 브레드크럼 */}
-        <div className="bg-white border-b border-gray-100">
-          <div className="mx-auto max-w-[var(--content-max-width)] px-4 py-3">
-            <nav className="flex items-center gap-1.5 text-sm text-gray-500">
-              <a href="/" className="flex items-center hover:text-primary transition-colors">
-                <HomeIcon className="h-4 w-4" />
-              </a>
-              <ChevronRightIcon className="h-3 w-3 text-gray-300" />
-              <a href="/products" className="hover:text-primary transition-colors">
-                전체상품
-              </a>
-              <ChevronRightIcon className="h-3 w-3 text-gray-300" />
-              <a href={`/products?category=${product.categoryName}`} className="hover:text-primary transition-colors">
-                {product.categoryName}
-              </a>
-              <ChevronRightIcon className="h-3 w-3 text-gray-300" />
-              <span className="text-gray-900 font-medium truncate max-w-[200px]">
-                {product.name}
-              </span>
-            </nav>
-          </div>
+    <div className="min-h-screen bg-white">
+      {/* Desktop Header */}
+      <div className="hidden md:block"><EdHeader /></div>
+
+      {/* Mobile back header */}
+      <div className="md:hidden absolute top-0 left-0 right-0 z-40 pt-[50px] px-4 pb-[10px] flex items-center justify-between">
+        <a href="/" className="w-[38px] h-[38px] bg-paper/92 flex items-center justify-center">
+          <IconChevronLeft size={19} className="text-ink" />
+        </a>
+        <div className="flex gap-[7px]">
+          <button className="w-[38px] h-[38px] bg-paper/92 flex items-center justify-center border-none cursor-pointer">
+            <IconHeart size={18} className="text-ink" />
+          </button>
+          <a href="/cart" className="w-[38px] h-[38px] bg-paper/92 flex items-center justify-center">
+            <IconCart size={18} className="text-ink" />
+          </a>
+        </div>
+      </div>
+
+      {/* Desktop 2-column layout */}
+      <div className="md:max-w-[1280px] md:mx-auto md:px-10 md:pt-10 md:grid md:grid-cols-2 md:gap-12">
+        {/* Hero Image */}
+        <div className="relative w-full aspect-square bg-cream overflow-hidden">
+          <img src={product.img} alt={product.name} className="w-full h-full object-cover" />
+          <span className="absolute left-0 bottom-0 font-mono text-[13px] font-bold text-white bg-sale-red py-[5px] px-[11px]">
+            {product.off} SALE
+          </span>
         </div>
 
-        {/* 상품 상세 영역 */}
-        <div className="mx-auto max-w-[var(--content-max-width)] px-4 py-8">
-          <div className="grid grid-cols-1 gap-8 lg:grid-cols-2 lg:gap-12">
-            {/* 좌측: 이미지 갤러리 */}
-            <div className="flex gap-3">
-              {/* 썸네일 리스트 (세로) */}
-              <div className="hidden flex-col gap-2 sm:flex">
-                {(productImages || placeholderGradients).map((item, index) => (
-                  <button
-                    key={index}
-                    onClick={() => setSelectedImageIndex(index)}
-                    className={`relative h-16 w-16 flex-shrink-0 overflow-hidden rounded-xl transition-all ${
-                      selectedImageIndex === index
-                        ? 'ring-2 ring-primary ring-offset-2'
-                        : 'ring-1 ring-gray-200 hover:ring-gray-300'
-                    }`}
-                  >
-                    {productImages ? (
-                      <img src={(item as typeof productImages[0]).url} alt={(item as typeof productImages[0]).alt || ''} className="h-full w-full object-cover" />
-                    ) : (
-                      <div className={`h-full w-full bg-gradient-to-br ${item as string}`} />
-                    )}
-                  </button>
-                ))}
+        {/* Product Info */}
+        <div className="px-5 md:px-0 pt-[18px]">
+          {/* Mall row */}
+          <a href="/malls/daisy-beauty" className="flex items-center gap-[9px] py-3 border-b border-[#E3DACA]">
+            <span className="font-mono text-[11px] font-semibold text-brass border border-[#E3DACA] py-[3px] px-[7px]">{product.unit}</span>
+            <span className="font-serif text-[15px] font-bold text-ink">{product.mall}</span>
+            <span className="text-[11.5px] text-[#A89B86]">입점 점포</span>
+            <span className="ml-auto font-mono text-[11.5px] font-semibold text-brass">점포 방문 →</span>
+          </a>
+
+          <h1 className="font-serif text-[23px] font-bold text-ink leading-[1.4] mt-4">{product.name}</h1>
+
+          <div className="flex items-center gap-1.5 mt-[11px]">
+            <IconStar size={14} className="text-brass" />
+            <span className="font-mono text-[13px] font-semibold text-ink">{product.rating}</span>
+            <span className="text-[12px] text-[#8A7C68]">후기 {product.reviews} · 누적판매 {product.sales}</span>
+          </div>
+
+          {/* Price */}
+          <div className="flex items-baseline gap-[9px] mt-[18px] pb-[18px] border-b-[1.5px] border-ink">
+            <span className="font-mono text-[22px] font-bold text-sale-red">{product.off}</span>
+            <span className="font-mono text-[30px] font-semibold text-ink tracking-tight">{product.price.toLocaleString('ko-KR')}</span>
+            <span className="font-mono text-[14px] text-[#A89B86] line-through">{product.originalPrice.toLocaleString('ko-KR')}</span>
+          </div>
+
+          {/* Delivery ledger */}
+          <div className="mt-1">
+            {[
+              { label: '배송', value: '무료배송 · 내일(수) 도착 예정' },
+              { label: '적립', value: <>구매 시 <b className="text-jade">최대 1,495P</b> 적립 (점포 등급별)</> },
+              { label: '혜택', value: '라이브 방송가 추가 5% · 카카오페이 1천원' },
+            ].map((row) => (
+              <div key={String(row.label)} className="flex gap-3 py-[14px] border-b border-[#E3DACA]">
+                <span className="font-mono text-[11px] text-brass w-12 tracking-[.04em]">{row.label}</span>
+                <span className="text-[12.5px] text-[#3A3024] font-medium">{row.value}</span>
               </div>
+            ))}
+          </div>
 
-              {/* 메인 이미지 */}
-              <div className="flex-1">
-                <div className="relative aspect-square overflow-hidden rounded-2xl bg-gray-50">
-                  {productImages ? (
-                    <img
-                      src={productImages[selectedImageIndex]?.url || product.thumbnailUrl}
-                      alt={productImages[selectedImageIndex]?.alt || product.name}
-                      className="h-full w-full object-cover"
-                    />
-                  ) : (
-                    <div className={`flex h-full w-full items-center justify-center bg-gradient-to-br ${placeholderGradients[selectedImageIndex] || placeholderGradients[0]}`}>
-                      <div className="text-center">
-                        <div className="text-6xl font-bold text-white/30">
-                          {selectedImageIndex + 1}
-                        </div>
-                        <p className="mt-2 text-sm font-medium text-white/50">상품 이미지</p>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* 이미지 배지 */}
-                  <div className="absolute left-3 top-3 flex flex-col gap-1.5">
-                    {hasDiscount && (
-                      <span className="rounded-lg bg-red-500 px-2.5 py-1 text-xs font-bold text-white shadow-sm">
-                        {discountRate}% OFF
-                      </span>
-                    )}
-                    {product.isNew && (
-                      <span className="rounded-lg bg-primary px-2.5 py-1 text-xs font-bold text-white shadow-sm">
-                        NEW
-                      </span>
-                    )}
-                    {isSoldOut && (
-                      <span className="rounded-lg bg-gray-800 px-2.5 py-1 text-xs font-bold text-white">
-                        품절
-                      </span>
-                    )}
-                  </div>
-                </div>
-
-                {/* 모바일 썸네일 (가로 스크롤) */}
-                <div className="mt-3 flex gap-2 overflow-x-auto sm:hidden">
-                  {(productImages || placeholderGradients).map((item, index) => (
-                    <button
-                      key={index}
-                      onClick={() => setSelectedImageIndex(index)}
-                      className={`relative h-14 w-14 flex-shrink-0 overflow-hidden rounded-lg transition-all ${
-                        selectedImageIndex === index
-                          ? 'ring-2 ring-primary ring-offset-1'
-                          : 'ring-1 ring-gray-200'
-                      }`}
-                    >
-                      {productImages ? (
-                        <img src={(item as typeof productImages[0]).url} alt={(item as typeof productImages[0]).alt || ''} className="h-full w-full object-cover" />
-                      ) : (
-                        <div className={`h-full w-full bg-gradient-to-br ${item as string}`} />
-                      )}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            {/* 우측: 상품 정보 */}
-            <div className="flex flex-col">
-              {/* 몰 이름 */}
-              <a
-                href={`/malls/${product.mallSlug}`}
-                className="mb-1.5 text-sm font-medium text-gray-400 hover:text-primary transition-colors"
-              >
-                {product.mallName}
-              </a>
-
-              {/* 상품명 */}
-              <h1 className="text-2xl font-bold text-gray-900 leading-tight">
-                {product.name}
-              </h1>
-
-              {/* 평점 & 리뷰 */}
-              <div className="mt-3 flex items-center gap-2">
-                <RatingStars rating={product.averageRating} size="md" />
-                <span className="text-sm font-semibold text-gray-700">
-                  {product.averageRating.toFixed(1)}
-                </span>
-                <span className="text-sm text-gray-400">
-                  리뷰 {product.reviewCount}건
-                </span>
-                <span className="text-gray-200">|</span>
-                <span className="text-sm text-gray-400">
-                  구매 {product.salesCount}건
-                </span>
-              </div>
-
-              {/* 가격 영역 */}
-              <div className="mt-5 rounded-2xl bg-gray-50 p-5">
-                {hasDiscount && (
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="text-sm text-gray-400 line-through">
-                      {formatKRW(product.price)}
-                    </span>
-                    <Badge variant="danger">{discountRate}% 할인</Badge>
-                  </div>
-                )}
-                <div className="flex items-baseline gap-1">
-                  {hasDiscount && (
-                    <span className="text-2xl font-bold text-red-500">
-                      {discountRate}%
-                    </span>
-                  )}
-                  <span className="text-3xl font-bold text-gray-900">
-                    {formatKRW(displayPrice)}
-                  </span>
-                </div>
-              </div>
-
-              {/* 배송 정보 */}
-              <div className="mt-4 flex items-center gap-2">
-                <TruckIcon className="h-4.5 w-4.5 text-gray-400 flex-shrink-0" />
-                {freeShipping ? (
-                  <Badge variant="success">무료배송</Badge>
-                ) : (
-                  <span className="text-sm text-gray-600">배송비 {formatKRW(product.shippingInfo.fee)}</span>
-                )}
-                <span className="text-xs text-gray-400">
-                  | 도착예정 {product.shippingInfo.estimatedDays}일 이내
-                </span>
-              </div>
-
-              {/* 구분선 */}
-              <hr className="my-5 border-gray-100" />
-
-              {/* 옵션 선택 */}
-              <div className="space-y-4">
-                {product.options.map((option) => (
-                  <div key={option.name}>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">
-                      {option.name}
-                    </label>
-                    <select
-                      value={selectedOptions[option.name] || ''}
-                      onChange={(e) => setSelectedOptions((prev) => ({ ...prev, [option.name]: e.target.value }))}
-                      className="w-full appearance-none rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-700 outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary/10"
-                    >
-                      <option value="">{option.name}을(를) 선택해주세요</option>
-                      {option.values.map((val) => (
-                        <option key={val} value={val}>{val}</option>
-                      ))}
-                    </select>
-                  </div>
-                ))}
-
-                {/* 수량 선택 */}
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">
-                    수량
-                  </label>
-                  <div className="flex items-center gap-0">
-                    <button
-                      onClick={() => setQuantity(Math.max(1, quantity - 1))}
-                      className="flex h-11 w-11 items-center justify-center rounded-l-xl border border-gray-200 bg-white text-gray-600 transition-colors hover:bg-gray-50 active:bg-gray-100"
-                    >
-                      <MinusIcon className="h-4 w-4" />
-                    </button>
-                    <div className="flex h-11 w-14 items-center justify-center border-y border-gray-200 bg-white text-sm font-semibold text-gray-900">
-                      {quantity}
-                    </div>
-                    <button
-                      onClick={() => setQuantity(Math.min(product.stock, quantity + 1))}
-                      className="flex h-11 w-11 items-center justify-center rounded-r-xl border border-gray-200 bg-white text-gray-600 transition-colors hover:bg-gray-50 active:bg-gray-100"
-                    >
-                      <PlusIcon className="h-4 w-4" />
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              {/* 총 상품 금액 */}
-              <div className="mt-5 flex items-center justify-between rounded-2xl bg-gray-900 px-5 py-4">
-                <span className="text-sm font-medium text-gray-300">총 상품 금액</span>
-                <span className="text-xl font-bold text-white">
-                  {formatKRW(totalPrice)}
-                </span>
-              </div>
-
-              {/* 액션 버튼 */}
-              <div className="mt-4 flex gap-2">
-                <button
-                  onClick={handleWishlistToggle}
-                  className={`flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl border transition-all ${
-                    isWished
-                      ? 'border-red-200 bg-red-50 text-red-500'
-                      : 'border-gray-200 bg-white text-gray-400 hover:border-gray-300 hover:text-gray-500'
-                  }`}
-                >
-                  <HeartIcon className={`h-5 w-5 ${isWished ? 'fill-current' : ''}`} />
+          {/* Desktop Buy Area */}
+          <div className="hidden md:block mt-6">
+            <div className="flex items-center gap-3">
+              <div className="flex items-center border border-ink">
+                <button onClick={() => setQty(Math.max(1, qty - 1))} className="w-[38px] h-[50px] border-none bg-transparent text-ink cursor-pointer flex items-center justify-center">
+                  <IconMinus size={16} />
                 </button>
-                <Button
-                  variant="outline"
-                  size="lg"
-                  fullWidth
-                  onClick={handleAddToCart}
-                  disabled={isSoldOut}
-                  className="rounded-xl"
-                >
-                  장바구니 담기
-                </Button>
-                <Button
-                  variant="default"
-                  size="lg"
-                  fullWidth
-                  onClick={handleBuyNow}
-                  disabled={isSoldOut}
-                  className="rounded-xl"
-                >
-                  {isSoldOut ? '품절된 상품입니다' : '바로 구매하기'}
-                </Button>
+                <span className="w-8 text-center font-mono text-[15px] font-semibold text-ink">{qty}</span>
+                <button onClick={() => setQty(qty + 1)} className="w-[38px] h-[50px] border-none bg-transparent text-ink cursor-pointer flex items-center justify-center">
+                  <IconPlus size={16} />
+                </button>
               </div>
-
-              {/* 공유 버튼 */}
-              <button className="mt-3 flex items-center justify-center gap-1.5 text-sm text-gray-400 hover:text-gray-600 transition-colors">
-                <ShareIcon className="h-4 w-4" />
-                공유하기
-              </button>
-
-              {/* 안내 태그 */}
-              <div className="mt-5 flex flex-wrap gap-2">
-                <div className="flex items-center gap-1.5 rounded-lg bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-600">
-                  <ShieldCheckIcon className="h-3.5 w-3.5" />
-                  안전결제
-                </div>
-                <div className="flex items-center gap-1.5 rounded-lg bg-green-50 px-3 py-1.5 text-xs font-medium text-green-600">
-                  <ArrowPathIcon className="h-3.5 w-3.5" />
-                  7일 이내 교환/반품
-                </div>
-                <div className="flex items-center gap-1.5 rounded-lg bg-purple-50 px-3 py-1.5 text-xs font-medium text-purple-600">
-                  <CheckCircleIcon className="h-3.5 w-3.5" />
-                  정품 보장
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* 탭 영역 */}
-          <div className="mt-16">
-            {/* 탭 네비게이션 */}
-            <div className="border-b border-gray-200">
-              <div className="flex">
-                {[
-                  { id: 'description', label: '상품설명' },
-                  { id: 'reviews', label: `리뷰(${product.reviewCount})` },
-                  { id: 'inquiry', label: `문의(${inquiries.length})` },
-                  { id: 'shipping', label: '배송/교환/반품' },
-                ].map((tab) => (
-                  <button
-                    key={tab.id}
-                    onClick={() => setActiveTab(tab.id)}
-                    className={`relative flex-1 py-4 text-center text-sm font-medium transition-colors ${
-                      activeTab === tab.id
-                        ? 'text-gray-900'
-                        : 'text-gray-400 hover:text-gray-600'
-                    }`}
-                  >
-                    {tab.label}
-                    {activeTab === tab.id && (
-                      <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gray-900 rounded-full" />
-                    )}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* 탭 콘텐츠 */}
-            <div className="mt-8">
-              {/* 상품설명 탭 */}
-              {activeTab === 'description' && (
-                <div className="rounded-2xl bg-white p-8 shadow-sm">
-                  <h3 className="text-lg font-bold text-gray-900 mb-4">상품 상세정보</h3>
-                  <div className="prose prose-gray max-w-none">
-                    <p className="text-gray-600 leading-relaxed mb-6">
-                      {product.description || '고급 소재로 제작된 프리미엄 제품입니다. 꼼꼼한 마감과 세련된 디자인으로 어디서든 활용할 수 있습니다.'}
-                    </p>
-
-                    {/* 상품 상세 이미지 영역 */}
-                    <div className="space-y-4">
-                      {productImages ? (
-                        productImages.map((img, index) => (
-                          <div key={index} className="overflow-hidden rounded-2xl">
-                            <img src={img.url} alt={img.alt || `상세 이미지 ${index + 1}`} className="w-full" />
-                          </div>
-                        ))
-                      ) : (
-                        placeholderGradients.slice(0, 3).map((gradient, index) => (
-                          <div
-                            key={index}
-                            className={`flex h-64 items-center justify-center rounded-2xl bg-gradient-to-br ${gradient}`}
-                          >
-                            <p className="text-lg font-medium text-white/50">상세 이미지 {index + 1}</p>
-                          </div>
-                        ))
-                      )}
-                    </div>
-
-                    {/* 상품 스펙 테이블 */}
-                    <div className="mt-8">
-                      <h4 className="text-base font-bold text-gray-900 mb-3">상품 정보</h4>
-                      <div className="overflow-hidden rounded-xl border border-gray-200">
-                        <table className="w-full text-sm">
-                          <tbody>
-                            {[
-                              ['상품명', product.name],
-                              ['카테고리', product.categoryName],
-                              ['판매몰', product.mallName],
-                              ['배송비', freeShipping ? '무료배송' : formatKRW(product.shippingInfo.fee)],
-                              ['배송예정', `주문 후 ${product.shippingInfo.estimatedDays}일 이내 출고`],
-                              ['상품상태', '새상품'],
-                            ].map(([label, value], index) => (
-                              <tr key={label} className={index % 2 === 0 ? 'bg-gray-50/50' : 'bg-white'}>
-                                <td className="w-1/3 border-b border-gray-100 px-4 py-3 font-medium text-gray-500">
-                                  {label}
-                                </td>
-                                <td className="border-b border-gray-100 px-4 py-3 text-gray-700">
-                                  {value}
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* 리뷰 탭 */}
-              {activeTab === 'reviews' && (
-                <div className="rounded-2xl bg-white p-8 shadow-sm">
-                  {/* 리뷰 요약 */}
-                  <div className="flex items-center gap-8 mb-8 pb-8 border-b border-gray-100">
-                    <div className="text-center">
-                      <div className="text-4xl font-bold text-gray-900">
-                        {product.averageRating.toFixed(1)}
-                      </div>
-                      <RatingStars rating={product.averageRating} size="lg" />
-                      <p className="mt-1 text-sm text-gray-400">{product.reviewCount}개 리뷰</p>
-                    </div>
-                    <div className="flex-1 space-y-1.5">
-                      {[5, 4, 3, 2, 1].map((star) => {
-                        const count = reviews.filter((r) => r.rating === star).length;
-                        const total = reviews.length || 1;
-                        const percentage = Math.round((count / total) * 100);
-                        return (
-                          <div key={star} className="flex items-center gap-2">
-                            <span className="w-4 text-xs font-medium text-gray-500 text-right">{star}</span>
-                            <StarSolidIcon className="h-3 w-3 text-amber-400" />
-                            <div className="flex-1 h-2 rounded-full bg-gray-100 overflow-hidden">
-                              <div
-                                className="h-full rounded-full bg-amber-400 transition-all"
-                                style={{ width: `${percentage}%` }}
-                              />
-                            </div>
-                            <span className="w-8 text-xs text-gray-400 text-right">{count}</span>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  {/* 리뷰 목록 */}
-                  {reviewsLoading ? (
-                    <div className="space-y-6">
-                      {Array.from({ length: 3 }).map((_, i) => (
-                        <div key={i} className="pb-6 border-b border-gray-50">
-                          <Skeleton className="h-8 w-48 mb-2" />
-                          <Skeleton className="h-4 w-full" />
-                        </div>
-                      ))}
-                    </div>
-                  ) : reviews.length === 0 ? (
-                    <div className="py-12 text-center text-gray-400">
-                      <p className="text-sm">아직 리뷰가 없습니다.</p>
-                      <p className="text-xs mt-1">첫 번째 리뷰를 작성해보세요!</p>
-                    </div>
-                  ) : (
-                    <div className="space-y-6">
-                      {reviews.map((review) => (
-                        <div key={review.id} className="pb-6 border-b border-gray-50 last:border-0">
-                          <div className="flex items-center justify-between mb-2">
-                            <div className="flex items-center gap-2">
-                              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gray-100 text-xs font-bold text-gray-500">
-                                {review.authorName.charAt(0)}
-                              </div>
-                              <div>
-                                <span className="text-sm font-medium text-gray-700">
-                                  {review.authorName.charAt(0)}{'*'.repeat(Math.max(0, review.authorName.length - 1))}
-                                </span>
-                                <div className="flex items-center gap-1.5">
-                                  <RatingStars rating={review.rating ?? 0} size="sm" />
-                                  <span className="text-xs text-gray-400">
-                                    {review.createdAt instanceof Date
-                                      ? review.createdAt.toLocaleDateString('ko-KR')
-                                      : new Date(review.createdAt).toLocaleDateString('ko-KR')}
-                                  </span>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                          {review.title && (
-                            <p className="text-sm font-medium text-gray-800 ml-10 mb-1">{review.title}</p>
-                          )}
-                          <p className="text-sm text-gray-600 leading-relaxed ml-10">
-                            {review.content}
-                          </p>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* 문의 탭 */}
-              {activeTab === 'inquiry' && (
-                <div className="rounded-2xl bg-white p-8 shadow-sm">
-                  <div className="flex items-center justify-between mb-6">
-                    <h3 className="text-lg font-bold text-gray-900">상품 문의</h3>
-                    <Button variant="outline" size="sm">
-                      <ChatBubbleLeftEllipsisIcon className="h-4 w-4" />
-                      문의하기
-                    </Button>
-                  </div>
-
-                  {inquiriesLoading ? (
-                    <div className="space-y-4">
-                      {Array.from({ length: 3 }).map((_, i) => (
-                        <Skeleton key={i} className="h-20 w-full rounded-xl" />
-                      ))}
-                    </div>
-                  ) : inquiries.length === 0 ? (
-                    <div className="py-12 text-center text-gray-400">
-                      <p className="text-sm">아직 문의가 없습니다.</p>
-                      <p className="text-xs mt-1">궁금한 점이 있으면 문의해주세요.</p>
-                    </div>
-                  ) : (
-                    <div className="space-y-4">
-                      {inquiries.map((inquiry) => {
-                        const hasAnswer = inquiry.status === 'published' && inquiry.content;
-                        return (
-                          <div key={inquiry.id} className="rounded-xl border border-gray-100 overflow-hidden">
-                            <div className="p-4">
-                              <div className="flex items-center justify-between mb-2">
-                                <div className="flex items-center gap-2">
-                                  <span className="text-sm font-medium text-gray-700">
-                                    {inquiry.authorName.charAt(0)}{'*'.repeat(Math.max(0, inquiry.authorName.length - 1))}
-                                  </span>
-                                  <span className="text-xs text-gray-400">
-                                    {inquiry.createdAt instanceof Date
-                                      ? inquiry.createdAt.toLocaleDateString('ko-KR')
-                                      : new Date(inquiry.createdAt).toLocaleDateString('ko-KR')}
-                                  </span>
-                                </div>
-                              </div>
-                              <p className="text-sm text-gray-600">Q. {inquiry.title}</p>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* 배송/교환/반품 탭 */}
-              {activeTab === 'shipping' && (
-                <div className="rounded-2xl bg-white p-8 shadow-sm">
-                  <div className="space-y-8">
-                    {/* 배송 안내 */}
-                    <div>
-                      <div className="flex items-center gap-2 mb-4">
-                        <TruckIcon className="h-5 w-5 text-gray-600" />
-                        <h3 className="text-base font-bold text-gray-900">배송 안내</h3>
-                      </div>
-                      <div className="rounded-xl bg-gray-50 p-5 space-y-2.5">
-                        <div className="flex gap-3">
-                          <span className="text-sm font-medium text-gray-500 w-20 flex-shrink-0">배송비</span>
-                          <span className="text-sm text-gray-700">
-                            {freeShipping
-                              ? '무료배송'
-                              : `${formatKRW(product.shippingInfo.fee)} (${formatKRW(product.shippingInfo.freeShippingThreshold)} 이상 무료)`
-                            }
-                          </span>
-                        </div>
-                        <div className="flex gap-3">
-                          <span className="text-sm font-medium text-gray-500 w-20 flex-shrink-0">배송방법</span>
-                          <span className="text-sm text-gray-700">택배 배송</span>
-                        </div>
-                        <div className="flex gap-3">
-                          <span className="text-sm font-medium text-gray-500 w-20 flex-shrink-0">배송기간</span>
-                          <span className="text-sm text-gray-700">
-                            결제 확인 후 {product.shippingInfo.estimatedDays}~{product.shippingInfo.estimatedDays + 1}일 이내 출고 (주말/공휴일 제외)
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* 교환/반품 안내 */}
-                    <div>
-                      <div className="flex items-center gap-2 mb-4">
-                        <ArrowPathIcon className="h-5 w-5 text-gray-600" />
-                        <h3 className="text-base font-bold text-gray-900">교환/반품 안내</h3>
-                      </div>
-                      <div className="rounded-xl bg-gray-50 p-5 space-y-2.5">
-                        <div className="flex gap-3">
-                          <span className="text-sm font-medium text-gray-500 w-20 flex-shrink-0">교환/반품</span>
-                          <span className="text-sm text-gray-700">수령 후 7일 이내 가능</span>
-                        </div>
-                        <div className="flex gap-3">
-                          <span className="text-sm font-medium text-gray-500 w-20 flex-shrink-0">반품 배송비</span>
-                          <span className="text-sm text-gray-700">편도 3,000원 (고객 변심 시)</span>
-                        </div>
-                        <div className="flex gap-3">
-                          <span className="text-sm font-medium text-gray-500 w-20 flex-shrink-0">교환 배송비</span>
-                          <span className="text-sm text-gray-700">6,000원 (고객 변심 시)</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* 교환/반품 불가 사유 */}
-                    <div>
-                      <div className="flex items-center gap-2 mb-4">
-                        <ShieldCheckIcon className="h-5 w-5 text-gray-600" />
-                        <h3 className="text-base font-bold text-gray-900">교환/반품 불가 사유</h3>
-                      </div>
-                      <div className="rounded-xl bg-gray-50 p-5">
-                        <ul className="space-y-2 text-sm text-gray-600">
-                          <li className="flex items-start gap-2">
-                            <span className="mt-1.5 h-1 w-1 rounded-full bg-gray-400 flex-shrink-0" />
-                            수령일로부터 7일이 경과한 경우
-                          </li>
-                          <li className="flex items-start gap-2">
-                            <span className="mt-1.5 h-1 w-1 rounded-full bg-gray-400 flex-shrink-0" />
-                            상품을 사용하였거나 일부 소비된 경우
-                          </li>
-                          <li className="flex items-start gap-2">
-                            <span className="mt-1.5 h-1 w-1 rounded-full bg-gray-400 flex-shrink-0" />
-                            포장을 개봉하여 상품 가치가 훼손된 경우
-                          </li>
-                          <li className="flex items-start gap-2">
-                            <span className="mt-1.5 h-1 w-1 rounded-full bg-gray-400 flex-shrink-0" />
-                            고객의 주문에 따라 개별 제작되는 상품의 경우
-                          </li>
-                          <li className="flex items-start gap-2">
-                            <span className="mt-1.5 h-1 w-1 rounded-full bg-gray-400 flex-shrink-0" />
-                            시간이 경과하여 재판매가 곤란할 정도로 상품의 가치가 하락한 경우
-                          </li>
-                        </ul>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* 연관 상품 */}
-          <div className="mt-16">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-bold text-gray-900">연관 상품</h2>
-              <a
-                href="/products"
-                className="flex items-center gap-1 text-sm font-medium text-gray-500 hover:text-primary transition-colors"
-              >
-                더보기
-                <ChevronRightIcon className="h-4 w-4" />
-              </a>
-            </div>
-            <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-              {relatedProducts.map((p) => (
-                <ProductCard
-                  key={p.id}
-                  product={p}
-                  style="grid"
-                  showMallName
-                />
-              ))}
+              <EdButton variant="outline" size="lg" className="flex-1">장바구니</EdButton>
+              <EdButton variant="ink" size="lg" className="flex-[1.4]">₩{totalFormatted} 구매</EdButton>
             </div>
           </div>
         </div>
-      </main>
-      <Footer />
-    </>
+      </div>
+
+      {/* Related Products */}
+      <div className="px-5 md:px-10 md:max-w-[1280px] md:mx-auto">
+        <EdHeading level={3} className="mt-7">이 점포의 다른 상품</EdHeading>
+        <div className="flex gap-3 overflow-x-auto -mx-5 md:mx-0 px-5 md:px-0 pt-[15px] pb-4 scrollbar-none md:grid md:grid-cols-4 md:gap-6">
+          {related.map((r) => (
+            <a key={r.id} href={`/products/${r.id}`} className="flex-none w-[122px] md:w-auto md:flex-auto">
+              <div className="relative w-[122px] md:w-full h-[122px] md:h-auto md:aspect-square bg-cream overflow-hidden">
+                <img src={r.img} alt={r.name} className="w-full h-full object-cover" />
+              </div>
+              <div className="text-[12px] text-[#3A3024] font-semibold leading-snug mt-2 line-clamp-2">{r.name}</div>
+              <div className="font-mono text-[13.5px] font-semibold text-ink mt-1">{r.price}</div>
+            </a>
+          ))}
+        </div>
+      </div>
+
+      {/* Mobile Buy Bar */}
+      <div className="md:hidden fixed left-0 right-0 bottom-0 z-[55] px-4 pt-3 pb-[26px] bg-white/96 backdrop-blur-[12px] border-t-[1.5px] border-ink">
+        <div className="flex items-center gap-[11px]">
+          <div className="flex items-center border border-ink">
+            <button onClick={() => setQty(Math.max(1, qty - 1))} className="w-[38px] h-[50px] border-none bg-transparent text-[20px] text-ink cursor-pointer">−</button>
+            <span className="w-8 text-center font-mono text-[15px] font-semibold text-ink">{qty}</span>
+            <button onClick={() => setQty(qty + 1)} className="w-[38px] h-[50px] border-none bg-transparent text-[20px] text-ink cursor-pointer">+</button>
+          </div>
+          <a href="/cart" className="flex-1 h-[54px] border border-ink flex items-center justify-center text-ink text-[14.5px] font-bold">장바구니</a>
+          <button className="flex-[1.4] h-[54px] border-none bg-ink text-paper text-[14.5px] font-bold cursor-pointer">₩{totalFormatted} 구매</button>
+        </div>
+      </div>
+
+      <div className="hidden md:block mt-16"><EdFooter /></div>
+    </div>
   );
 }

@@ -17,8 +17,20 @@
   /* Surface */
   --color-surface: #F9FAFB;
 
+  /* Editorial Design Tokens */
+  --color-paper: #F6F3EC;
+  --color-cream: #EDE8DD;
+  --color-ink: #1A1815;
+  --color-ink-light: #6B6560;
+  --color-brass: #9C7C46;
+  --color-jade: #1C6B57;
+  --color-sale-red: #C53A22;
+  --color-hairline: rgba(26, 24, 21, 0.12);
+
   /* Font */
   --font-sans: 'Pretendard Variable', 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-serif: 'Gowun Batang', serif;
+  --font-mono: 'IBM Plex Mono', monospace;
 }
 
 /* Platform Defaults (overridden by ThemeProvider on mall pages) */
@@ -88,6 +100,21 @@ body {
 @keyframes spinSlow {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
+}
+
+@keyframes msMarquee {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+
+@keyframes msFade {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes msPing {
+  0% { transform: scale(1); opacity: .7; }
+  75%, 100% { transform: scale(2.4); opacity: 0; }
 }
 
 .animate-fadeIn {
